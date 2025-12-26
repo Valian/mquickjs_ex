@@ -193,10 +193,12 @@ end
 ```
 
 **Phase 1 Success Criteria:**
-- [ ] MQuickJS compiles as part of mix build
-- [ ] Can create a JS context from Elixir
-- [ ] Can evaluate simple JS code without crashing
-- [ ] Context cleanup works (no memory leaks)
+- [x] MQuickJS compiles as part of mix build
+- [x] Can create a JS context from Elixir
+- [x] Can evaluate simple JS code without crashing
+- [x] Context cleanup works (no memory leaks)
+
+**Phase 1 Complete** - See `c_src/mquickjs_ex.c` for implementation.
 
 ---
 
@@ -353,10 +355,17 @@ fail:
 ```
 
 **Phase 2 Success Criteria:**
-- [ ] `eval!` returns Elixir terms (integers, floats, strings, booleans, nil)
-- [ ] `eval!` returns nested structures (lists, maps)
-- [ ] `set!` accepts Elixir terms and sets JS globals
-- [ ] `get!` retrieves JS globals as Elixir terms
+- [x] `eval!` returns Elixir terms (integers, floats, strings, booleans, nil)
+- [x] `eval!` returns nested structures (lists, maps)
+- [x] `set!` accepts Elixir terms and sets JS globals
+- [x] `get!` retrieves JS globals as Elixir terms
+
+**Phase 2 Complete** - See `c_src/mquickjs_ex.c` for implementation. Key implementation notes:
+- Uses `JS_EVAL_RETVAL` flag to get expression results
+- Object enumeration via `js_object_keys()` from `mquickjs_priv.h`
+- GC protection via `JS_PushGCRef`/`JS_PopGCRef` for nested conversions
+- Recursion depth limit (100) to prevent stack overflow
+- Functions return `{:error, :function_not_serializable}`
 
 ---
 
