@@ -179,4 +179,141 @@ defmodule MquickjsEx do
   def gc(ctx) do
     NIF.nif_gc(ctx)
   end
+
+  @doc """
+  Run JavaScript code with callback support.
+
+  This function enables JavaScript code to call back into Elixir functions
+  using the trampoline pattern. The `callbacks` parameter is a map of
+  function names to Elixir functions.
+
+  ## How It Works
+
+  When JS code calls a registered callback function, the execution yields
+  to Elixir, which executes the callback and resumes JS execution with
+  the result. This process repeats until the code completes.
+
+  Note: Due to MQuickJS limitations, code before each callback may execute
+  multiple times (replay pattern). Avoid side effects before your first callback.
+
+  ## Examples
+
+      iex> {:ok, ctx} = MquickjsEx.new()
+      iex> {:ok, result, _ctx} = MquickjsEx.run(ctx, \"fetch_data('url')\", %{
+      ...>   \"fetch_data\" => fn [url] -> \"data from \#{url}\" end
+      ...> })
+      iex> result
+      \"data from url\"
+
+      # Multiple callbacks
+      iex> {:ok, ctx} = MquickjsEx.new()
+      iex> callbacks = %{
+      ...>   \"add\" => fn [a, b] -> a + b end,
+      ...>   \"multiply\" => fn [a, b] -> a * b end
+      ...> }
+      iex> {:ok, result, _ctx} = MquickjsEx.run(ctx, \"add(2, 3) + multiply(4, 5)\", callbacks)
+      iex> result
+      25
+
+  ## Parameters
+
+    * `ctx` - The JavaScript context
+    * `code` - JavaScript code to execute
+    * `callbacks` - Map of function names (strings) to Elixir functions.
+      Each function receives a list of arguments and should return a value.
+
+  ## Returns
+
+    * `{:ok, result, ctx}` - Code completed successfully
+    * `{:error, reason}` - An error occurred
+
+  """
+  def run(ctx, code, callbacks \\ %{}) when is_binary(code) and is_map(callbacks) do
+    wrapped_code = wrap_with_callbacks(code, Map.keys(callbacks))
+    run_loop(ctx, wrapped_code, callbacks, [])
+  end
+
+  @doc """
+  Run JavaScript code with callback support, raising on error.
+
+  Same as `run/3` but raises on error and returns `{result, ctx}` for chaining.
+
+  ## Examples
+
+      iex> {:ok, ctx} = MquickjsEx.new()
+      iex> {result, _ctx} = MquickjsEx.run!(ctx, \"double(21)\", %{
+      ...>   \"double\" => fn [x] -> x * 2 end
+      ...> })
+      iex> result
+      42
+
+  """
+  def run!(ctx, code, callbacks \\ %{}) when is_binary(code) and is_map(callbacks) do
+    case run(ctx, code, callbacks) do
+      {:ok, result, ctx} -> {result, ctx}
+      {:error, reason} when is_binary(reason) -> raise "JS Error: #{reason}"
+      {:error, reason} -> raise "JS Error: #{inspect(reason)}"
+    end
+  end
+
+  # Wrap user code with callback function definitions.
+  # Each registered callback becomes a JS function that calls __call().
+  defp wrap_with_callbacks(code, callback_names) do
+    wrappers =
+      callback_names
+      |> Enum.map(fn name ->
+        # Create a wrapper function that calls __call with the function name and args
+        """
+        function #{name}() {
+          var args = [];
+          for (var i = 0; i < arguments.length; i++) args.push(arguments[i]);
+          return __call("#{name}", args);
+        }
+        """
+      end)
+      |> Enum.join("\n")
+
+    # Just prepend the wrappers - user code runs in global scope
+    # and the last expression value is returned by JS_EVAL_RETVAL
+    "#{wrappers}\n#{code}"
+  end
+
+  # The run loop: execute code, handle yields, resume with results.
+  defp run_loop(ctx, code, callbacks, cached_results) do
+    # Convert cached results to JSON strings for the NIF
+    cached_json = Enum.map(cached_results, &Jason.encode!/1)
+
+    case NIF.nif_run(ctx, code, cached_json) do
+      {:ok, result} ->
+        {:ok, result, ctx}
+
+      {:yield, func_name, args_json} ->
+        # Parse the args JSON
+        case Jason.decode(args_json) do
+          {:ok, args} ->
+            # Look up the callback
+            case Map.fetch(callbacks, func_name) do
+              {:ok, callback} when is_function(callback) ->
+                # Execute the callback
+                try do
+                  result = callback.(args)
+                  # Add result to cache and re-run
+                  run_loop(ctx, code, callbacks, cached_results ++ [result])
+                rescue
+                  e ->
+                    {:error, "Callback error in #{func_name}: #{Exception.message(e)}"}
+                end
+
+              :error ->
+                {:error, "Unknown callback: #{func_name}"}
+            end
+
+          {:error, _} ->
+            {:error, "Failed to parse callback args"}
+        end
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
 end

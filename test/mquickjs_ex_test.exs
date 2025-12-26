@@ -306,4 +306,375 @@ defmodule MquickjsExTest do
       assert {:ok, 2} = MquickjsEx.get(ctx, :b)
     end
   end
+
+  # ============================================================================
+  # Phase 3: Trampoline Pattern
+  # ============================================================================
+
+  describe "Phase 3: basic callback invocation" do
+    test "run with no callbacks works like eval" do
+      {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
+      {:ok, result, _ctx} = MquickjsEx.run(ctx, "1 + 2", %{})
+      assert result == 3
+    end
+
+    test "run with single callback" do
+      {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
+
+      callbacks = %{
+        "double" => fn [x] -> x * 2 end
+      }
+
+      {:ok, result, _ctx} = MquickjsEx.run(ctx, "double(21)", callbacks)
+      assert result == 42
+    end
+
+    test "run with callback returning string" do
+      {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
+
+      callbacks = %{
+        "greet" => fn [name] -> "Hello, #{name}!" end
+      }
+
+      {:ok, result, _ctx} = MquickjsEx.run(ctx, ~s|greet("World")|, callbacks)
+      assert result == "Hello, World!"
+    end
+
+    test "run with callback returning list" do
+      {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
+
+      callbacks = %{
+        "get_items" => fn [] -> [1, 2, 3] end
+      }
+
+      {:ok, result, _ctx} = MquickjsEx.run(ctx, "get_items()", callbacks)
+      assert result == [1, 2, 3]
+    end
+
+    test "run with callback returning map" do
+      {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
+
+      callbacks = %{
+        "get_user" => fn [id] -> %{"id" => id, "name" => "Alice"} end
+      }
+
+      {:ok, result, _ctx} = MquickjsEx.run(ctx, "get_user(1)", callbacks)
+      assert result == %{"id" => 1, "name" => "Alice"}
+    end
+
+    test "run with multiple arguments" do
+      {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
+
+      callbacks = %{
+        "add" => fn [a, b] -> a + b end
+      }
+
+      {:ok, result, _ctx} = MquickjsEx.run(ctx, "add(10, 32)", callbacks)
+      assert result == 42
+    end
+
+    test "run with no arguments" do
+      {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
+
+      callbacks = %{
+        "get_answer" => fn [] -> 42 end
+      }
+
+      {:ok, result, _ctx} = MquickjsEx.run(ctx, "get_answer()", callbacks)
+      assert result == 42
+    end
+  end
+
+  describe "Phase 3: multiple sequential callbacks" do
+    test "two callbacks in sequence" do
+      {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
+
+      callbacks = %{
+        "fetch_a" => fn [] -> 10 end,
+        "fetch_b" => fn [] -> 20 end
+      }
+
+      code = """
+      var a = fetch_a();
+      var b = fetch_b();
+      a + b
+      """
+
+      {:ok, result, _ctx} = MquickjsEx.run(ctx, code, callbacks)
+      assert result == 30
+    end
+
+    test "three callbacks in sequence" do
+      {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
+
+      callbacks = %{
+        "step1" => fn [] -> 1 end,
+        "step2" => fn [x] -> x * 2 end,
+        "step3" => fn [x] -> x + 10 end
+      }
+
+      code = """
+      var a = step1();
+      var b = step2(a);
+      var c = step3(b);
+      c
+      """
+
+      {:ok, result, _ctx} = MquickjsEx.run(ctx, code, callbacks)
+      # step1() -> 1, step2(1) -> 2, step3(2) -> 12
+      assert result == 12
+    end
+
+    test "same callback called multiple times" do
+      {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
+
+      counter = :counters.new(1, [])
+
+      callbacks = %{
+        "next" => fn [] ->
+          :counters.add(counter, 1, 1)
+          :counters.get(counter, 1)
+        end
+      }
+
+      code = """
+      var a = next();
+      var b = next();
+      var c = next();
+      [a, b, c]
+      """
+
+      {:ok, result, _ctx} = MquickjsEx.run(ctx, code, callbacks)
+      assert result == [1, 2, 3]
+    end
+  end
+
+  describe "Phase 3: callback result used in computations" do
+    test "callback result used in arithmetic" do
+      {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
+
+      callbacks = %{
+        "get_base" => fn [] -> 100 end
+      }
+
+      {:ok, result, _ctx} = MquickjsEx.run(ctx, "get_base() * 2 + 5", callbacks)
+      assert result == 205
+    end
+
+    test "callback result used in string concatenation" do
+      {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
+
+      callbacks = %{
+        "get_name" => fn [] -> "World" end
+      }
+
+      {:ok, result, _ctx} = MquickjsEx.run(ctx, ~s|"Hello, " + get_name() + "!"|, callbacks)
+      assert result == "Hello, World!"
+    end
+
+    test "callback result used in array operations" do
+      {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
+
+      callbacks = %{
+        "get_items" => fn [] -> [1, 2, 3] end
+      }
+
+      code = """
+      var items = get_items();
+      items.push(4);
+      items
+      """
+
+      {:ok, result, _ctx} = MquickjsEx.run(ctx, code, callbacks)
+      assert result == [1, 2, 3, 4]
+    end
+
+    test "callback result used in object operations" do
+      {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
+
+      callbacks = %{
+        "get_config" => fn [] -> %{"debug" => false} end
+      }
+
+      code = """
+      var config = get_config();
+      config.debug = true;
+      config.timeout = 5000;
+      config
+      """
+
+      {:ok, result, _ctx} = MquickjsEx.run(ctx, code, callbacks)
+      assert result == %{"debug" => true, "timeout" => 5000}
+    end
+  end
+
+  describe "Phase 3: nested callbacks" do
+    test "callback in conditional branch" do
+      {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
+
+      callbacks = %{
+        "should_proceed" => fn [] -> true end,
+        "get_value" => fn [] -> 42 end
+      }
+
+      code = """
+      if (should_proceed()) {
+        get_value()
+      } else {
+        0
+      }
+      """
+
+      {:ok, result, _ctx} = MquickjsEx.run(ctx, code, callbacks)
+      assert result == 42
+    end
+
+    test "callback in loop" do
+      {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
+
+      callbacks = %{
+        "get_item" => fn [i] -> i * 10 end
+      }
+
+      code = """
+      var sum = 0;
+      for (var i = 0; i < 3; i++) {
+        sum = sum + get_item(i);
+      }
+      sum
+      """
+
+      {:ok, result, _ctx} = MquickjsEx.run(ctx, code, callbacks)
+      # 0*10 + 1*10 + 2*10 = 30
+      assert result == 30
+    end
+
+    test "callback result passed to another callback" do
+      {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
+
+      callbacks = %{
+        "fetch_id" => fn [] -> 42 end,
+        "fetch_user" => fn [id] -> %{"id" => id, "name" => "User#{id}"} end
+      }
+
+      code = """
+      var id = fetch_id();
+      var user = fetch_user(id);
+      user.name
+      """
+
+      {:ok, result, _ctx} = MquickjsEx.run(ctx, code, callbacks)
+      assert result == "User42"
+    end
+  end
+
+  describe "Phase 3: error handling" do
+    test "unknown callback returns error" do
+      {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
+
+      {:error, reason} = MquickjsEx.run(ctx, "unknown_func()", %{})
+      assert reason =~ "unknown_func"
+    end
+
+    test "JS error propagates correctly" do
+      {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
+
+      callbacks = %{
+        "get_value" => fn [] -> 42 end
+      }
+
+      {:error, _reason} = MquickjsEx.run(ctx, "undefined_var", callbacks)
+    end
+
+    test "callback exception is caught" do
+      {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
+
+      callbacks = %{
+        "fail" => fn [] -> raise "intentional error" end
+      }
+
+      {:error, reason} = MquickjsEx.run(ctx, "fail()", callbacks)
+      assert reason =~ "Callback error"
+      assert reason =~ "intentional error"
+    end
+  end
+
+  describe "Phase 3: run! function" do
+    test "run! returns {result, ctx} on success" do
+      {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
+
+      callbacks = %{
+        "double" => fn [x] -> x * 2 end
+      }
+
+      {result, ^ctx} = MquickjsEx.run!(ctx, "double(21)", callbacks)
+      assert result == 42
+    end
+
+    test "run! raises on error" do
+      {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
+
+      assert_raise RuntimeError, ~r/JS Error/, fn ->
+        MquickjsEx.run!(ctx, "unknown_func()", %{})
+      end
+    end
+  end
+
+  describe "Phase 3: complex scenarios" do
+    test "simulated HTTP fetch pattern" do
+      {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
+
+      callbacks = %{
+        "fetch_data" => fn [url] ->
+          # Simulate HTTP response
+          %{"url" => url, "status" => 200, "body" => "response from #{url}"}
+        end
+      }
+
+      code = """
+      var response = fetch_data("https://api.example.com/data");
+      response.body
+      """
+
+      {:ok, result, _ctx} = MquickjsEx.run(ctx, code, callbacks)
+      assert result == "response from https://api.example.com/data"
+    end
+
+    test "multiple fetch with aggregation" do
+      {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
+
+      callbacks = %{
+        "fetch_user" => fn [id] -> %{"id" => id, "name" => "User#{id}"} end
+      }
+
+      code = """
+      var user1 = fetch_user(1);
+      var user2 = fetch_user(2);
+      var user3 = fetch_user(3);
+      [user1.name, user2.name, user3.name]
+      """
+
+      {:ok, result, _ctx} = MquickjsEx.run(ctx, code, callbacks)
+      assert result == ["User1", "User2", "User3"]
+    end
+
+    test "JSON parsing pattern" do
+      {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
+
+      callbacks = %{
+        "fetch_json" => fn [_url] ->
+          ~s|{"items": [1, 2, 3], "count": 3}|
+        end
+      }
+
+      code = """
+      var json_str = fetch_json("http://example.com");
+      var data = JSON.parse(json_str);
+      data.count
+      """
+
+      {:ok, result, _ctx} = MquickjsEx.run(ctx, code, callbacks)
+      assert result == 3
+    end
+  end
 end

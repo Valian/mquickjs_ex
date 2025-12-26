@@ -22,7 +22,8 @@ defmodule MquickjsEx.MixProject do
 
   defp deps do
     [
-      {:elixir_make, "~> 0.8", runtime: false}
+      {:elixir_make, "~> 0.8", runtime: false},
+      {:jason, "~> 1.4"}
     ]
   end
 end

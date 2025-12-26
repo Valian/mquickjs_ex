@@ -654,11 +654,21 @@ end
 ```
 
 **Phase 3 Success Criteria:**
-- [ ] JS code can call `__call("name", [args])` and yield to Elixir
-- [ ] Elixir callbacks receive correct arguments
-- [ ] Resume injects callback result back into JS
-- [ ] Multiple sequential callbacks work correctly
-- [ ] Nested callbacks work (callback triggers another callback)
+- [x] JS code can call `__call("name", [args])` and yield to Elixir
+- [x] Elixir callbacks receive correct arguments
+- [x] Resume injects callback result back into JS
+- [x] Multiple sequential callbacks work correctly
+- [x] Nested callbacks work (callback triggers another callback)
+
+**Phase 3 Complete** - See `c_src/mquickjs_ex.c` (nif_run function) and `lib/mquickjs_ex.ex` (run/3, run!/3).
+
+Key implementation notes:
+- Uses pure JavaScript for the yield mechanism (no stdlib modification needed)
+- `__call` function checks cached results or throws special exception
+- Exception message format: `__yield__:<func_name>:<args_json>`
+- Elixir run loop parses yield, executes callback, replays with cached results
+- JSON serialization via Jason for callback arguments and results
+- 25 new tests covering basic, sequential, nested callbacks, and error handling
 
 ---
 

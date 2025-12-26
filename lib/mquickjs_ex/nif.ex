@@ -17,4 +17,5 @@ defmodule MquickjsEx.NIF do
   def nif_get(_ctx, _name), do: :erlang.nif_error(:not_loaded)
   def nif_set(_ctx, _name, _value), do: :erlang.nif_error(:not_loaded)
   def nif_gc(_ctx), do: :erlang.nif_error(:not_loaded)
+  def nif_run(_ctx, _code, _cached_results), do: :erlang.nif_error(:not_loaded)
 end
