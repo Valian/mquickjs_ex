@@ -22,3 +22,11 @@ erl_crash.dump
 # Ignore package tarball (built via "mix hex.build").
 mquickjs_ex-*.tar
 
+# NIF build artifacts
+/priv/*.so
+/priv/*.so.dSYM/
+/c_src/*.h
+/c_src/mquickjs_ex_stdlib_gen
+
+# Conductor workspace context
+.context/
