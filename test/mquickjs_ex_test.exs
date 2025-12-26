@@ -7,12 +7,12 @@ defmodule MquickjsExTest do
   describe "Phase 1 validation" do
     test "can create context" do
       assert {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
-      assert is_reference(ctx)
+      assert is_struct(ctx, MquickjsEx.Context)
     end
 
     test "can create context with custom memory size" do
       assert {:ok, ctx} = MquickjsEx.new(memory: 131_072)
-      assert is_reference(ctx)
+      assert is_struct(ctx, MquickjsEx.Context)
     end
 
     test "can eval simple code" do
@@ -154,46 +154,46 @@ defmodule MquickjsExTest do
   describe "Phase 2: Elixir → JS (via set/get)" do
     test "set and get integer" do
       {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
-      assert :ok = MquickjsEx.set(ctx, :x, 42)
+      assert {:ok, ctx} = MquickjsEx.set(ctx, :x, 42)
       assert {:ok, 42} = MquickjsEx.get(ctx, :x)
     end
 
     test "set and get float" do
       {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
-      assert :ok = MquickjsEx.set(ctx, :pi, 3.14159)
+      assert {:ok, ctx} = MquickjsEx.set(ctx, :pi, 3.14159)
       assert {:ok, pi} = MquickjsEx.get(ctx, :pi)
       assert_in_delta pi, 3.14159, 0.00001
     end
 
     test "set and get string" do
       {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
-      assert :ok = MquickjsEx.set(ctx, :message, "Hello from Elixir")
+      assert {:ok, ctx} = MquickjsEx.set(ctx, :message, "Hello from Elixir")
       assert {:ok, "Hello from Elixir"} = MquickjsEx.get(ctx, :message)
     end
 
     test "set and get boolean" do
       {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
-      assert :ok = MquickjsEx.set(ctx, :flag, true)
+      assert {:ok, ctx} = MquickjsEx.set(ctx, :flag, true)
       assert {:ok, true} = MquickjsEx.get(ctx, :flag)
-      assert :ok = MquickjsEx.set(ctx, :flag, false)
+      assert {:ok, ctx} = MquickjsEx.set(ctx, :flag, false)
       assert {:ok, false} = MquickjsEx.get(ctx, :flag)
     end
 
     test "set and get nil" do
       {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
-      assert :ok = MquickjsEx.set(ctx, :nothing, nil)
+      assert {:ok, ctx} = MquickjsEx.set(ctx, :nothing, nil)
       assert {:ok, nil} = MquickjsEx.get(ctx, :nothing)
     end
 
     test "set and get list" do
       {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
-      assert :ok = MquickjsEx.set(ctx, :items, [1, 2, 3])
+      assert {:ok, ctx} = MquickjsEx.set(ctx, :items, [1, 2, 3])
       assert {:ok, [1, 2, 3]} = MquickjsEx.get(ctx, :items)
     end
 
     test "set and get map" do
       {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
-      assert :ok = MquickjsEx.set(ctx, :config, %{"debug" => true, "timeout" => 5000})
+      assert {:ok, ctx} = MquickjsEx.set(ctx, :config, %{"debug" => true, "timeout" => 5000})
       assert {:ok, %{"debug" => true, "timeout" => 5000}} = MquickjsEx.get(ctx, :config)
     end
 
@@ -207,20 +207,20 @@ defmodule MquickjsExTest do
         "count" => 2
       }
 
-      assert :ok = MquickjsEx.set(ctx, :data, data)
+      assert {:ok, ctx} = MquickjsEx.set(ctx, :data, data)
       assert {:ok, ^data} = MquickjsEx.get(ctx, :data)
     end
 
     test "atom values become strings" do
       {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
       # atoms (other than true/false/nil) become JS strings
-      assert :ok = MquickjsEx.set(ctx, :status, :active)
+      assert {:ok, ctx} = MquickjsEx.set(ctx, :status, :active)
       assert {:ok, "active"} = MquickjsEx.get(ctx, :status)
     end
 
     test "maps with atom keys work" do
       {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
-      assert :ok = MquickjsEx.set(ctx, :config, %{debug: true, timeout: 5000})
+      assert {:ok, ctx} = MquickjsEx.set(ctx, :config, %{debug: true, timeout: 5000})
       # Keys come back as strings
       assert {:ok, %{"debug" => true, "timeout" => 5000}} = MquickjsEx.get(ctx, :config)
     end
@@ -229,14 +229,14 @@ defmodule MquickjsExTest do
   describe "Phase 2: round-trip through JS" do
     test "set value, use in JS, get result" do
       {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
-      :ok = MquickjsEx.set(ctx, :x, 10)
+      {:ok, ctx} = MquickjsEx.set(ctx, :x, 10)
       {:ok, result} = MquickjsEx.eval(ctx, "x * 2")
       assert result == 20
     end
 
     test "pass array, modify in JS" do
       {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
-      :ok = MquickjsEx.set(ctx, :arr, [1, 2, 3])
+      {:ok, ctx} = MquickjsEx.set(ctx, :arr, [1, 2, 3])
       {:ok, _} = MquickjsEx.eval(ctx, "arr.push(4); arr.push(5);")
       {:ok, result} = MquickjsEx.get(ctx, :arr)
       assert result == [1, 2, 3, 4, 5]
@@ -244,7 +244,7 @@ defmodule MquickjsExTest do
 
     test "pass object, modify in JS" do
       {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
-      :ok = MquickjsEx.set(ctx, :obj, %{"a" => 1})
+      {:ok, ctx} = MquickjsEx.set(ctx, :obj, %{"a" => 1})
       {:ok, _} = MquickjsEx.eval(ctx, "obj.b = 2; obj.c = 3;")
       {:ok, result} = MquickjsEx.get(ctx, :obj)
       assert result == %{"a" => 1, "b" => 2, "c" => 3}
@@ -280,7 +280,7 @@ defmodule MquickjsExTest do
   describe "bang functions" do
     test "eval! returns {result, ctx}" do
       {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
-      {result, ^ctx} = MquickjsEx.eval!(ctx, "1 + 2")
+      {result, _ctx} = MquickjsEx.eval!(ctx, "1 + 2")
       assert result == 3
     end
 
@@ -301,7 +301,7 @@ defmodule MquickjsExTest do
       {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
       ctx = MquickjsEx.set!(ctx, :a, 1)
       ctx = MquickjsEx.set!(ctx, :b, 2)
-      assert is_reference(ctx)
+      assert is_struct(ctx, MquickjsEx.Context)
       assert {:ok, 1} = MquickjsEx.get(ctx, :a)
       assert {:ok, 2} = MquickjsEx.get(ctx, :b)
     end
@@ -607,7 +607,7 @@ defmodule MquickjsExTest do
         "double" => fn [x] -> x * 2 end
       }
 
-      {result, ^ctx} = MquickjsEx.run!(ctx, "double(21)", callbacks)
+      {result, _ctx} = MquickjsEx.run!(ctx, "double(21)", callbacks)
       assert result == 42
     end
 
@@ -675,6 +675,99 @@ defmodule MquickjsExTest do
 
       {:ok, result, _ctx} = MquickjsEx.run(ctx, code, callbacks)
       assert result == 3
+    end
+  end
+
+  # ============================================================================
+  # Persistent Elixir Functions (set with functions)
+  # ============================================================================
+
+  describe "setting functions via set/3" do
+    test "set function and call from eval" do
+      {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
+      {:ok, ctx} = MquickjsEx.set(ctx, :double, fn [x] -> x * 2 end)
+      {:ok, result} = MquickjsEx.eval(ctx, "double(21)")
+      assert result == 42
+    end
+
+    test "set! function and call from eval!" do
+      {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
+      ctx = MquickjsEx.set!(ctx, :add, fn [a, b] -> a + b end)
+      {result, _ctx} = MquickjsEx.eval!(ctx, "add(10, 32)")
+      assert result == 42
+    end
+
+    test "multiple functions set via set!" do
+      {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
+      ctx = MquickjsEx.set!(ctx, :add, fn [a, b] -> a + b end)
+      ctx = MquickjsEx.set!(ctx, :multiply, fn [a, b] -> a * b end)
+      ctx = MquickjsEx.set!(ctx, :greet, fn [name] -> "Hello, #{name}!" end)
+
+      {result, ctx} = MquickjsEx.eval!(ctx, "add(2, 3)")
+      assert result == 5
+
+      {result, ctx} = MquickjsEx.eval!(ctx, "multiply(4, 5)")
+      assert result == 20
+
+      {result, _ctx} = MquickjsEx.eval!(ctx, ~s|greet("World")|)
+      assert result == "Hello, World!"
+    end
+
+    test "mix of values and functions" do
+      {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
+      ctx = MquickjsEx.set!(ctx, :multiplier, 10)
+      ctx = MquickjsEx.set!(ctx, :scale, fn [x] -> x * 10 end)
+
+      {result, _ctx} = MquickjsEx.eval!(ctx, "scale(multiplier)")
+      assert result == 100
+    end
+
+    test "function persists across multiple eval calls" do
+      {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
+      ctx = MquickjsEx.set!(ctx, :increment, fn [x] -> x + 1 end)
+
+      {result1, ctx} = MquickjsEx.eval!(ctx, "increment(1)")
+      {result2, ctx} = MquickjsEx.eval!(ctx, "increment(10)")
+      {result3, _ctx} = MquickjsEx.eval!(ctx, "increment(100)")
+
+      assert result1 == 2
+      assert result2 == 11
+      assert result3 == 101
+    end
+
+    test "function with complex return value" do
+      {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
+      ctx = MquickjsEx.set!(ctx, :get_user, fn [id] ->
+        %{"id" => id, "name" => "User#{id}", "active" => true}
+      end)
+
+      {result, _ctx} = MquickjsEx.eval!(ctx, "get_user(42).name")
+      assert result == "User42"
+    end
+
+    test "run/3 merges with context callbacks" do
+      {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
+      # Set a persistent callback
+      ctx = MquickjsEx.set!(ctx, :base, fn [] -> 100 end)
+
+      # Run with an additional temporary callback
+      {:ok, result, _ctx} = MquickjsEx.run(ctx, "base() + extra()", %{
+        "extra" => fn [] -> 50 end
+      })
+
+      assert result == 150
+    end
+
+    test "run/3 explicit callback overrides context callback" do
+      {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
+      ctx = MquickjsEx.set!(ctx, :value, fn [] -> 10 end)
+
+      # Override with explicit callback
+      {:ok, result, _ctx} = MquickjsEx.run(ctx, "value()", %{
+        "value" => fn [] -> 999 end
+      })
+
+      assert result == 999
     end
   end
 end

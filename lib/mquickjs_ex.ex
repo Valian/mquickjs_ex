@@ -8,6 +8,16 @@ defmodule MquickjsEx do
       {:ok, result} = MquickjsEx.eval(ctx, "1 + 2")
       # result => 3
 
+  ## Setting Values and Functions
+
+  Use `set/3` to set both values and functions:
+
+      {:ok, ctx} = MquickjsEx.new()
+      ctx = MquickjsEx.set!(ctx, :config, %{debug: true})
+      ctx = MquickjsEx.set!(ctx, :add, fn [a, b] -> a + b end)
+      {result, _} = MquickjsEx.eval!(ctx, "add(1, 2)")
+      # result => 3
+
   ## Type Conversions
 
   | Elixir        | JavaScript |
@@ -20,9 +30,11 @@ defmodule MquickjsEx do
   | atoms         | string     |
   | lists         | Array      |
   | maps          | Object     |
+  | functions     | callable (via trampoline) |
 
   """
 
+  alias MquickjsEx.Context
   alias MquickjsEx.NIF
 
   @doc """
@@ -35,13 +47,17 @@ defmodule MquickjsEx do
   ## Examples
 
       iex> {:ok, ctx} = MquickjsEx.new()
-      iex> is_reference(ctx)
+      iex> is_struct(ctx, MquickjsEx.Context)
       true
 
   """
   def new(opts \\ []) do
     mem_size = Keyword.get(opts, :memory, 65536)
-    NIF.nif_new(mem_size)
+
+    case NIF.nif_new(mem_size) do
+      {:ok, ref} -> {:ok, Context.new(ref)}
+      error -> error
+    end
   end
 
   @doc """
@@ -49,6 +65,9 @@ defmodule MquickjsEx do
 
   Returns `{:ok, result}` where result is the value of the last expression,
   or `{:error, reason}` on failure.
+
+  If the context has registered callback functions (set via `set/3`), they
+  will be available to call from the JavaScript code.
 
   ## Examples
 
@@ -61,8 +80,15 @@ defmodule MquickjsEx do
       {:ok, "hello"}
 
   """
-  def eval(ctx, code) when is_binary(code) do
-    NIF.nif_eval(ctx, code)
+  def eval(%Context{} = ctx, code) when is_binary(code) do
+    if Context.has_callbacks?(ctx) do
+      case run_with_callbacks(ctx, code, ctx.callbacks) do
+        {:ok, result, _ctx} -> {:ok, result}
+        {:error, _} = error -> error
+      end
+    else
+      NIF.nif_eval(ctx.ref, code)
+    end
   end
 
   @doc """
@@ -73,16 +99,24 @@ defmodule MquickjsEx do
   ## Examples
 
       iex> {:ok, ctx} = MquickjsEx.new()
-      iex> {result, ^ctx} = MquickjsEx.eval!(ctx, "1 + 2")
+      iex> {result, _ctx} = MquickjsEx.eval!(ctx, "1 + 2")
       iex> result
       3
 
   """
-  def eval!(ctx, code) when is_binary(code) do
-    case NIF.nif_eval(ctx, code) do
-      {:ok, result} -> {result, ctx}
-      {:error, reason} when is_binary(reason) -> raise "JS Error: #{reason}"
-      {:error, reason} -> raise "JS Error: #{inspect(reason)}"
+  def eval!(%Context{} = ctx, code) when is_binary(code) do
+    if Context.has_callbacks?(ctx) do
+      case run_with_callbacks(ctx, code, ctx.callbacks) do
+        {:ok, result, ctx} -> {result, ctx}
+        {:error, reason} when is_binary(reason) -> raise "JS Error: #{reason}"
+        {:error, reason} -> raise "JS Error: #{inspect(reason)}"
+      end
+    else
+      case NIF.nif_eval(ctx.ref, code) do
+        {:ok, result} -> {result, ctx}
+        {:error, reason} when is_binary(reason) -> raise "JS Error: #{reason}"
+        {:error, reason} -> raise "JS Error: #{inspect(reason)}"
+      end
     end
   end
 
@@ -99,8 +133,8 @@ defmodule MquickjsEx do
       {:ok, 42}
 
   """
-  def get(ctx, name) when is_atom(name) or is_binary(name) do
-    NIF.nif_get(ctx, name)
+  def get(%Context{} = ctx, name) when is_atom(name) or is_binary(name) do
+    NIF.nif_get(ctx.ref, name)
   end
 
   @doc """
@@ -114,8 +148,8 @@ defmodule MquickjsEx do
       42
 
   """
-  def get!(ctx, name) when is_atom(name) or is_binary(name) do
-    case NIF.nif_get(ctx, name) do
+  def get!(%Context{} = ctx, name) when is_atom(name) or is_binary(name) do
+    case NIF.nif_get(ctx.ref, name) do
       {:ok, value} -> value
       {:error, reason} when is_binary(reason) -> raise "JS Error: #{reason}"
       {:error, reason} -> raise "JS Error: #{inspect(reason)}"
@@ -123,28 +157,45 @@ defmodule MquickjsEx do
   end
 
   @doc """
-  Set a global variable in the JavaScript context.
+  Set a global variable or function in the JavaScript context.
 
   The variable name can be an atom or string. The value is converted
   from Elixir to JavaScript according to the type conversion table.
 
-  Returns `:ok` on success, or `{:error, reason}` on failure.
+  If the value is a function (arity 1, receiving a list of arguments),
+  it becomes a callable JavaScript function via the trampoline pattern.
+
+  Returns `{:ok, ctx}` on success (with potentially updated context for functions),
+  or `{:error, reason}` on failure.
 
   ## Examples
 
+      # Setting a value
       iex> {:ok, ctx} = MquickjsEx.new()
-      iex> MquickjsEx.set(ctx, :message, "Hello from Elixir")
-      :ok
+      iex> {:ok, ctx} = MquickjsEx.set(ctx, :message, "Hello from Elixir")
       iex> MquickjsEx.eval(ctx, "message")
       {:ok, "Hello from Elixir"}
 
+      # Setting a function
+      iex> {:ok, ctx} = MquickjsEx.new()
+      iex> {:ok, ctx} = MquickjsEx.set(ctx, :add, fn [a, b] -> a + b end)
+      iex> MquickjsEx.eval(ctx, "add(1, 2)")
+      {:ok, 3}
+
   """
-  def set(ctx, name, value) when is_atom(name) or is_binary(name) do
-    NIF.nif_set(ctx, name, value)
+  def set(%Context{} = ctx, name, fun) when (is_atom(name) or is_binary(name)) and is_function(fun, 1) do
+    {:ok, Context.put_callback(ctx, name, fun)}
+  end
+
+  def set(%Context{} = ctx, name, value) when is_atom(name) or is_binary(name) do
+    case NIF.nif_set(ctx.ref, name, value) do
+      :ok -> {:ok, ctx}
+      error -> error
+    end
   end
 
   @doc """
-  Set a global variable, raising on error.
+  Set a global variable or function, raising on error.
 
   Returns the context for chaining.
 
@@ -155,9 +206,19 @@ defmodule MquickjsEx do
       iex> MquickjsEx.get!(ctx, :x)
       100
 
+      iex> {:ok, ctx} = MquickjsEx.new()
+      iex> ctx = MquickjsEx.set!(ctx, :double, fn [x] -> x * 2 end)
+      iex> {result, _} = MquickjsEx.eval!(ctx, "double(21)")
+      iex> result
+      42
+
   """
-  def set!(ctx, name, value) when is_atom(name) or is_binary(name) do
-    case NIF.nif_set(ctx, name, value) do
+  def set!(%Context{} = ctx, name, fun) when (is_atom(name) or is_binary(name)) and is_function(fun, 1) do
+    Context.put_callback(ctx, name, fun)
+  end
+
+  def set!(%Context{} = ctx, name, value) when is_atom(name) or is_binary(name) do
+    case NIF.nif_set(ctx.ref, name, value) do
       :ok -> ctx
       {:error, reason} when is_binary(reason) -> raise "JS Error: #{reason}"
       {:error, reason} -> raise "JS Error: #{inspect(reason)}"
@@ -176,8 +237,8 @@ defmodule MquickjsEx do
       :ok
 
   """
-  def gc(ctx) do
-    NIF.nif_gc(ctx)
+  def gc(%Context{} = ctx) do
+    NIF.nif_gc(ctx.ref)
   end
 
   @doc """
@@ -186,6 +247,9 @@ defmodule MquickjsEx do
   This function enables JavaScript code to call back into Elixir functions
   using the trampoline pattern. The `callbacks` parameter is a map of
   function names to Elixir functions.
+
+  Note: If you've set functions via `set/3`, you can use `eval/2` instead -
+  the registered callbacks will be available automatically.
 
   ## How It Works
 
@@ -228,9 +292,10 @@ defmodule MquickjsEx do
     * `{:error, reason}` - An error occurred
 
   """
-  def run(ctx, code, callbacks \\ %{}) when is_binary(code) and is_map(callbacks) do
-    wrapped_code = wrap_with_callbacks(code, Map.keys(callbacks))
-    run_loop(ctx, wrapped_code, callbacks, [])
+  def run(%Context{} = ctx, code, callbacks \\ %{}) when is_binary(code) and is_map(callbacks) do
+    # Merge explicit callbacks with context callbacks (explicit takes precedence)
+    all_callbacks = Map.merge(ctx.callbacks, callbacks)
+    run_with_callbacks(ctx, code, all_callbacks)
   end
 
   @doc """
@@ -248,12 +313,18 @@ defmodule MquickjsEx do
       42
 
   """
-  def run!(ctx, code, callbacks \\ %{}) when is_binary(code) and is_map(callbacks) do
+  def run!(%Context{} = ctx, code, callbacks \\ %{}) when is_binary(code) and is_map(callbacks) do
     case run(ctx, code, callbacks) do
       {:ok, result, ctx} -> {result, ctx}
       {:error, reason} when is_binary(reason) -> raise "JS Error: #{reason}"
       {:error, reason} -> raise "JS Error: #{inspect(reason)}"
     end
+  end
+
+  # Internal: run with callbacks (used by both eval and run when callbacks present)
+  defp run_with_callbacks(%Context{} = ctx, code, callbacks) when is_map(callbacks) do
+    wrapped_code = wrap_with_callbacks(code, Map.keys(callbacks))
+    run_loop(ctx, wrapped_code, callbacks, [])
   end
 
   # Wrap user code with callback function definitions.
@@ -279,11 +350,11 @@ defmodule MquickjsEx do
   end
 
   # The run loop: execute code, handle yields, resume with results.
-  defp run_loop(ctx, code, callbacks, cached_results) do
+  defp run_loop(%Context{} = ctx, code, callbacks, cached_results) do
     # Convert cached results to JSON strings for the NIF
     cached_json = Enum.map(cached_results, &Jason.encode!/1)
 
-    case NIF.nif_run(ctx, code, cached_json) do
+    case NIF.nif_run(ctx.ref, code, cached_json) do
       {:ok, result} ->
         {:ok, result, ctx}
 
