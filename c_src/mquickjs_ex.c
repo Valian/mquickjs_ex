@@ -68,6 +68,9 @@ static ErlNifResourceType *JS_CONTEXT_TYPE;
 /* Maximum recursion depth for nested structures */
 #define MAX_SERIALIZE_DEPTH 100
 
+/* Yield marker prefix for exception messages */
+#define YIELD_MARKER "__yield__:"
+
 typedef struct {
     uint8_t *mem_buf;
     size_t mem_size;
@@ -841,6 +844,224 @@ static ERL_NIF_TERM nif_gc(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
     return enif_make_atom(env, "ok");
 }
 
+/* ============================================================================
+ * nif_run: Execute JS code with trampoline support
+ * ============================================================================ */
+
+/*
+ * Helper: Check if an exception message starts with the yield marker.
+ * Returns 1 if it's a yield, 0 otherwise.
+ * If it's a yield, extracts func_name and args_json.
+ */
+static int is_yield_exception(const char *msg, const char **func_name, size_t *func_name_len,
+                               const char **args_json, size_t *args_json_len)
+{
+    size_t marker_len = strlen(YIELD_MARKER);
+    if (strncmp(msg, YIELD_MARKER, marker_len) != 0) {
+        return 0;
+    }
+
+    /* Parse: "__yield__:<func_name>:<args_json>" */
+    const char *rest = msg + marker_len;
+    const char *colon = strchr(rest, ':');
+    if (!colon) {
+        return 0;
+    }
+
+    *func_name = rest;
+    *func_name_len = (size_t)(colon - rest);
+    *args_json = colon + 1;
+    *args_json_len = strlen(*args_json);
+
+    return 1;
+}
+
+/*
+ * nif_run(ctx, code, cached_results_json) - Execute JS code with callback support.
+ *
+ * This NIF:
+ * 1. Sets up __yield as a global function
+ * 2. Sets __call_results from cached_results_json (list of JSON strings)
+ * 3. Injects the trampoline wrapper code
+ * 4. Evaluates the user code
+ * 5. If yield exception: returns {:yield, func_name, args_json}
+ * 6. If real exception: returns {:error, message}
+ * 7. If success: returns {:ok, result}
+ *
+ * The cached_results_json is a list of JSON strings from previous callback results.
+ */
+static ERL_NIF_TERM nif_run(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
+{
+    JsContext *js;
+    if (!enif_get_resource(env, argv[0], JS_CONTEXT_TYPE, (void **)&js)) {
+        return enif_make_badarg(env);
+    }
+
+    ErlNifBinary code_bin;
+    if (!enif_inspect_binary(env, argv[1], &code_bin)) {
+        return enif_make_badarg(env);
+    }
+
+    /* argv[2] is the list of cached results (as JSON strings) */
+    if (!enif_is_list(env, argv[2])) {
+        return enif_make_badarg(env);
+    }
+
+    /*
+     * Strategy: Use pure JavaScript for the yield mechanism.
+     *
+     * We inject a __call function that either returns a cached result
+     * or throws a special exception to yield control back to Elixir.
+     *
+     * JavaScript code structure:
+     * 1. var __call_results = [<cached_result_1>, <cached_result_2>, ...];
+     * 2. var __call_index = 0;
+     * 3. function __call(name, args) {
+     *      if (__call_index < __call_results.length) {
+     *        return __call_results[__call_index++];
+     *      }
+     *      throw new Error("__yield__:" + name + ":" + JSON.stringify(args));
+     *    }
+     * 4. <user code>
+     */
+
+    /* Build the setup code with cached results */
+    /* First, count the cached results and build the JSON array literal */
+    unsigned int cached_len;
+    if (!enif_get_list_length(env, argv[2], &cached_len)) {
+        return enif_make_badarg(env);
+    }
+
+    /* Build __call_results array literal: [result1, result2, ...] */
+    /* Each result is already a JSON string, so we just need to join them */
+    size_t results_buf_size = 2 + cached_len * 2; /* "[]" + commas */
+    ERL_NIF_TERM head, tail = argv[2];
+    while (enif_get_list_cell(env, tail, &head, &tail)) {
+        ErlNifBinary item_bin;
+        if (enif_inspect_binary(env, head, &item_bin)) {
+            results_buf_size += item_bin.size;
+        }
+    }
+
+    char *results_array = malloc(results_buf_size + 1);
+    if (!results_array) {
+        return enif_make_tuple2(env,
+            enif_make_atom(env, "error"),
+            enif_make_atom(env, "alloc_failed"));
+    }
+
+    char *p = results_array;
+    *p++ = '[';
+    tail = argv[2];
+    int first = 1;
+    while (enif_get_list_cell(env, tail, &head, &tail)) {
+        ErlNifBinary item_bin;
+        if (enif_inspect_binary(env, head, &item_bin)) {
+            if (!first) *p++ = ',';
+            first = 0;
+            memcpy(p, item_bin.data, item_bin.size);
+            p += item_bin.size;
+        }
+    }
+    *p++ = ']';
+    *p = '\0';
+
+    /* Build the full setup + user code */
+    const char *setup_template =
+        "var __call_results = %s;\n"
+        "var __call_index = 0;\n"
+        "function __call(name, args) {\n"
+        "  if (__call_index < __call_results.length) {\n"
+        "    return __call_results[__call_index++];\n"
+        "  }\n"
+        "  throw new Error(\"__yield__:\" + name + \":\" + JSON.stringify(args));\n"
+        "}\n";
+
+    size_t setup_len = strlen(setup_template) + strlen(results_array);
+    size_t full_len = setup_len + code_bin.size + 10;
+
+    char *full_code = malloc(full_len);
+    if (!full_code) {
+        free(results_array);
+        return enif_make_tuple2(env,
+            enif_make_atom(env, "error"),
+            enif_make_atom(env, "alloc_failed"));
+    }
+
+    int written = snprintf(full_code, full_len, setup_template, results_array);
+    free(results_array);
+
+    memcpy(full_code + written, code_bin.data, code_bin.size);
+    full_code[written + code_bin.size] = '\0';
+
+    /* Evaluate the full code */
+    JSValue result = JS_Eval(js->ctx, full_code, written + code_bin.size, "run", JS_EVAL_RETVAL);
+    free(full_code);
+
+    if (JS_IsException(result)) {
+        JSValue err = JS_GetException(js->ctx);
+
+        /* Try to get error message */
+        JSValue msg_val = JS_GetPropertyStr(js->ctx, err, "message");
+        if (JS_IsString(js->ctx, msg_val)) {
+            JSCStringBuf buf;
+            const char *msg = JS_ToCString(js->ctx, msg_val, &buf);
+
+            /* Check if it's a yield exception */
+            const char *func_name;
+            size_t func_name_len;
+            const char *args_json;
+            size_t args_json_len;
+
+            if (is_yield_exception(msg, &func_name, &func_name_len,
+                                   &args_json, &args_json_len)) {
+                /* Return {:yield, func_name, args_json} */
+                ERL_NIF_TERM func_name_bin;
+                unsigned char *fn_data = enif_make_new_binary(env, func_name_len, &func_name_bin);
+                memcpy(fn_data, func_name, func_name_len);
+
+                ERL_NIF_TERM args_bin;
+                unsigned char *args_data = enif_make_new_binary(env, args_json_len, &args_bin);
+                memcpy(args_data, args_json, args_json_len);
+
+                return enif_make_tuple3(env,
+                    enif_make_atom(env, "yield"),
+                    func_name_bin,
+                    args_bin);
+            }
+
+            /* Real exception - return error */
+            size_t msg_len = strlen(msg);
+            ERL_NIF_TERM msg_bin;
+            unsigned char *data = enif_make_new_binary(env, msg_len, &msg_bin);
+            memcpy(data, msg, msg_len);
+            return enif_make_tuple2(env,
+                enif_make_atom(env, "error"),
+                msg_bin);
+        }
+
+        return enif_make_tuple2(env,
+            enif_make_atom(env, "error"),
+            enif_make_atom(env, "js_exception"));
+    }
+
+    /* Convert JS result to Elixir term */
+    ERL_NIF_TERM erl_result = js_to_erl(env, js->ctx, result, 0);
+
+    /* Check if conversion failed */
+    if (enif_is_tuple(env, erl_result)) {
+        int arity;
+        const ERL_NIF_TERM *tuple;
+        if (enif_get_tuple(env, erl_result, &arity, &tuple) && arity == 2) {
+            if (enif_is_identical(tuple[0], enif_make_atom(env, "error"))) {
+                return erl_result;
+            }
+        }
+    }
+
+    return enif_make_tuple2(env, enif_make_atom(env, "ok"), erl_result);
+}
+
 /* Resource destructor */
 static void js_context_destructor(ErlNifEnv *env, void *obj)
 {
@@ -872,6 +1093,7 @@ static ErlNifFunc nif_funcs[] = {
     {"nif_get", 2, nif_get, 0},
     {"nif_set", 3, nif_set, 0},
     {"nif_gc", 1, nif_gc, 0},
+    {"nif_run", 3, nif_run, 0},
 };
 
 ERL_NIF_INIT(Elixir.MquickjsEx.NIF, nif_funcs, load, NULL, NULL, NULL)

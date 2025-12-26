@@ -200,14 +200,107 @@ MquickjsEx.eval!(js, "while(true) {}")
 
 ---
 
+## Running JavaScript with Elixir Callbacks
+
+The `run/3` function enables JavaScript code to call back into Elixir functions
+using a trampoline pattern. This is the core feature for LLM-generated JavaScript
+sandboxes.
+
+### Basic Usage
+
+```elixir
+{:ok, js} = MquickjsEx.new()
+
+callbacks = %{
+  "fetch_data" => fn [url] ->
+    # Make HTTP request, return data
+    HTTPoison.get!(url).body
+  end
+}
+
+{:ok, result, js} = MquickjsEx.run(js, """
+  var data = fetch_data("https://api.example.com/users");
+  JSON.parse(data).count
+""", callbacks)
+```
+
+### Multiple Callbacks
+
+```elixir
+callbacks = %{
+  "add" => fn [a, b] -> a + b end,
+  "multiply" => fn [a, b] -> a * b end,
+  "greet" => fn [name] -> "Hello, #{name}!" end
+}
+
+{:ok, result, _js} = MquickjsEx.run(js, """
+  var sum = add(10, 20);
+  var product = multiply(sum, 2);
+  greet("Result is " + product)
+""", callbacks)
+# result => "Hello, Result is 60!"
+```
+
+### Bang Version
+
+```elixir
+# Raises on error, returns {result, ctx} for chaining
+{result, js} = MquickjsEx.run!(js, "double(21)", %{
+  "double" => fn [x] -> x * 2 end
+})
+# result => 42
+```
+
+### How It Works (Replay Pattern)
+
+Due to MQuickJS limitations (no coroutines), callbacks use a replay pattern:
+
+1. JavaScript calls a registered callback function
+2. Execution yields to Elixir with the function name and arguments
+3. Elixir executes the callback and stores the result
+4. The entire JavaScript code re-runs from the beginning
+5. Previous callback calls return cached results instantly
+6. This continues until all callbacks complete
+
+**Important:** Code before callbacks may execute multiple times. Avoid side effects
+before your first callback, or accept they may repeat.
+
+```javascript
+// ⚠️ This console.log may run multiple times if callbacks follow
+console.log("Starting...");
+var a = fetch("url1");  // callback
+var b = fetch("url2");  // callback
+return a + b;
+```
+
+### Error Handling
+
+```elixir
+# Unknown callback
+{:error, "Unknown callback: unknown_func"} =
+  MquickjsEx.run(js, "unknown_func()", %{})
+
+# Callback exception
+{:error, "Callback error in fail: ..."} =
+  MquickjsEx.run(js, "fail()", %{
+    "fail" => fn [] -> raise "oops" end
+  })
+
+# JavaScript error
+{:error, "undefined_var is not defined"} =
+  MquickjsEx.run(js, "undefined_var", %{})
+```
+
+---
+
 ## TODO: Future Features
 
 The following features from the Lua library are planned but not yet implemented:
 
-### Exposing Elixir Functions to JavaScript
+### Exposing Elixir Functions to JavaScript (Alternative API)
 
 ```elixir
-# TODO: Basic function exposure
+# TODO: Basic function exposure via set!
 js = MquickjsEx.set!(js, [:Math, :sum], fn args ->
   Enum.sum(args)
 end)
