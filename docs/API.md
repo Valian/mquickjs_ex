@@ -325,7 +325,8 @@ defmodule MyAPI do
   end
 end
 
-js = MquickjsEx.new() |> MquickjsEx.load_api(MyAPI)
+{:ok, js} = MquickjsEx.new()
+{:ok, js} = MquickjsEx.load_api(js, MyAPI)
 ```
 
 ### Calling JavaScript Functions from Elixir

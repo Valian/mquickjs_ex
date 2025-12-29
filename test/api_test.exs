@@ -137,7 +137,7 @@ defmodule MquickjsEx.APITest do
   describe "basic API" do
     test "load and call simple functions" do
       {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
-      ctx = MquickjsEx.load_api(ctx, BasicAPI)
+      {:ok, ctx} = MquickjsEx.load_api(ctx, BasicAPI)
 
       {:ok, result} = MquickjsEx.eval(ctx, "add(1, 2)")
       assert result == 3
@@ -151,7 +151,7 @@ defmodule MquickjsEx.APITest do
 
     test "API functions tracked in context" do
       {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
-      ctx = MquickjsEx.load_api(ctx, BasicAPI)
+      {:ok, ctx} = MquickjsEx.load_api(ctx, BasicAPI)
 
       assert BasicAPI in ctx.loaded_apis
     end
@@ -164,7 +164,7 @@ defmodule MquickjsEx.APITest do
   describe "scoped API" do
     test "single-level scope with string" do
       {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
-      ctx = MquickjsEx.load_api(ctx, ScopedAPI)
+      {:ok, ctx} = MquickjsEx.load_api(ctx, ScopedAPI)
 
       {:ok, result} = MquickjsEx.eval(ctx, "math.add(10, 5)")
       assert result == 15
@@ -175,7 +175,7 @@ defmodule MquickjsEx.APITest do
 
     test "nested scope with string" do
       {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
-      ctx = MquickjsEx.load_api(ctx, NestedScopeAPI)
+      {:ok, ctx} = MquickjsEx.load_api(ctx, NestedScopeAPI)
 
       {:ok, result} = MquickjsEx.eval(ctx, "utils.math.divide(10, 2)")
       assert result == 5.0
@@ -183,7 +183,7 @@ defmodule MquickjsEx.APITest do
 
     test "scope as list" do
       {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
-      ctx = MquickjsEx.load_api(ctx, ScopeAsListAPI)
+      {:ok, ctx} = MquickjsEx.load_api(ctx, ScopeAsListAPI)
 
       {:ok, result} = MquickjsEx.eval(ctx, ~s|helpers.string.upcase("hello")|)
       assert result == "HELLO"
@@ -194,8 +194,8 @@ defmodule MquickjsEx.APITest do
 
     test "multiple scoped APIs can coexist" do
       {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
-      ctx = MquickjsEx.load_api(ctx, ScopedAPI)
-      ctx = MquickjsEx.load_api(ctx, NestedScopeAPI)
+      {:ok, ctx} = MquickjsEx.load_api(ctx, ScopedAPI)
+      {:ok, ctx} = MquickjsEx.load_api(ctx, NestedScopeAPI)
 
       {:ok, result} = MquickjsEx.eval(ctx, "math.add(1, 2) + utils.math.divide(10, 2)")
       assert result == 8.0
@@ -210,7 +210,7 @@ defmodule MquickjsEx.APITest do
     test "read state from defjs function" do
       {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
       ctx = MquickjsEx.set!(ctx, :mykey, "myvalue")
-      ctx = MquickjsEx.load_api(ctx, StateAccessAPI)
+      {:ok, ctx} = MquickjsEx.load_api(ctx, StateAccessAPI)
 
       {:ok, result} = MquickjsEx.eval(ctx, ~s|get_config("mykey")|)
       assert result == "myvalue"
@@ -218,7 +218,7 @@ defmodule MquickjsEx.APITest do
 
     test "write state from defjs function" do
       {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
-      ctx = MquickjsEx.load_api(ctx, StateAccessAPI)
+      {:ok, ctx} = MquickjsEx.load_api(ctx, StateAccessAPI)
 
       {:ok, _} = MquickjsEx.eval(ctx, ~s|set_config("counter", 42)|)
       # State changes are local to the callback, need to verify through another callback
@@ -228,7 +228,7 @@ defmodule MquickjsEx.APITest do
     test "read and modify state" do
       {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
       ctx = MquickjsEx.set!(ctx, :counter, 0)
-      ctx = MquickjsEx.load_api(ctx, StateAccessAPI)
+      {:ok, ctx} = MquickjsEx.load_api(ctx, StateAccessAPI)
 
       code = """
       var a = get_and_increment("counter");
@@ -249,7 +249,7 @@ defmodule MquickjsEx.APITest do
   describe "variadic functions" do
     test "variadic function receives all arguments as list" do
       {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
-      ctx = MquickjsEx.load_api(ctx, VariadicAPI)
+      {:ok, ctx} = MquickjsEx.load_api(ctx, VariadicAPI)
 
       {:ok, result} = MquickjsEx.eval(ctx, "sum(1, 2, 3, 4, 5)")
       assert result == 15
@@ -263,7 +263,7 @@ defmodule MquickjsEx.APITest do
 
     test "variadic string join" do
       {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
-      ctx = MquickjsEx.load_api(ctx, VariadicAPI)
+      {:ok, ctx} = MquickjsEx.load_api(ctx, VariadicAPI)
 
       {:ok, result} = MquickjsEx.eval(ctx, ~s|join("Hello", "World", "!")|)
       assert result == "Hello World !"
@@ -271,7 +271,7 @@ defmodule MquickjsEx.APITest do
 
     test "non-variadic function after variadic" do
       {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
-      ctx = MquickjsEx.load_api(ctx, VariadicAPI)
+      {:ok, ctx} = MquickjsEx.load_api(ctx, VariadicAPI)
 
       {:ok, result} = MquickjsEx.eval(ctx, "double(21)")
       assert result == 42
@@ -279,7 +279,7 @@ defmodule MquickjsEx.APITest do
 
     test "variadic with state" do
       {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
-      ctx = MquickjsEx.load_api(ctx, VariadicWithStateAPI)
+      {:ok, ctx} = MquickjsEx.load_api(ctx, VariadicWithStateAPI)
 
       code = """
       var first = sum_and_store(1, 2, 3);
@@ -299,7 +299,7 @@ defmodule MquickjsEx.APITest do
   describe "guards" do
     test "function with guards dispatches correctly" do
       {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
-      ctx = MquickjsEx.load_api(ctx, GuardAPI)
+      {:ok, ctx} = MquickjsEx.load_api(ctx, GuardAPI)
 
       {:ok, result} = MquickjsEx.eval(ctx, "double(21)")
       assert result == 42
@@ -316,7 +316,7 @@ defmodule MquickjsEx.APITest do
   describe "argument destructuring" do
     test "list destructuring" do
       {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
-      ctx = MquickjsEx.load_api(ctx, DestructuringAPI)
+      {:ok, ctx} = MquickjsEx.load_api(ctx, DestructuringAPI)
 
       {:ok, result} = MquickjsEx.eval(ctx, "first([1, 2, 3])")
       assert result == 1
@@ -327,7 +327,7 @@ defmodule MquickjsEx.APITest do
 
     test "map destructuring" do
       {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
-      ctx = MquickjsEx.load_api(ctx, DestructuringAPI)
+      {:ok, ctx} = MquickjsEx.load_api(ctx, DestructuringAPI)
 
       {:ok, result} = MquickjsEx.eval(ctx, ~s|get_name({name: "Alice"})|)
       assert result == "Alice"
@@ -344,7 +344,7 @@ defmodule MquickjsEx.APITest do
   describe "install callback" do
     test "install modifies context" do
       {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
-      ctx = MquickjsEx.load_api(ctx, InstallAPI)
+      {:ok, ctx} = MquickjsEx.load_api(ctx, InstallAPI)
 
       {:ok, result} = MquickjsEx.eval(ctx, "installed.initialized")
       assert result == true
@@ -355,7 +355,7 @@ defmodule MquickjsEx.APITest do
 
     test "install returns JS code" do
       {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
-      ctx = MquickjsEx.load_api(ctx, InstallWithCodeAPI)
+      {:ok, ctx} = MquickjsEx.load_api(ctx, InstallWithCodeAPI)
 
       {:ok, result} = MquickjsEx.eval(ctx, "GLOBAL_CONSTANT")
       assert result == "from install"
@@ -372,7 +372,7 @@ defmodule MquickjsEx.APITest do
   describe "runtime_exception!" do
     test "raises with scope and function context" do
       {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
-      ctx = MquickjsEx.load_api(ctx, RuntimeExceptionAPI)
+      {:ok, ctx} = MquickjsEx.load_api(ctx, RuntimeExceptionAPI)
 
       {:ok, result} = MquickjsEx.eval(ctx, "safe.divide(10, 2)")
       assert result == 5.0
@@ -389,7 +389,7 @@ defmodule MquickjsEx.APITest do
   describe "mixed usage with set!" do
     test "API functions work alongside set! functions" do
       {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
-      ctx = MquickjsEx.load_api(ctx, BasicAPI)
+      {:ok, ctx} = MquickjsEx.load_api(ctx, BasicAPI)
       ctx = MquickjsEx.set!(ctx, :triple, fn [x] -> x * 3 end)
 
       {:ok, result} = MquickjsEx.eval(ctx, "add(1, 2) + triple(10)")
@@ -398,7 +398,7 @@ defmodule MquickjsEx.APITest do
 
     test "scoped API with global set! function" do
       {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
-      ctx = MquickjsEx.load_api(ctx, ScopedAPI)
+      {:ok, ctx} = MquickjsEx.load_api(ctx, ScopedAPI)
       ctx = MquickjsEx.set!(ctx, :double, fn [x] -> x * 2 end)
 
       {:ok, result} = MquickjsEx.eval(ctx, "double(math.add(1, 2))")
@@ -416,6 +416,26 @@ defmodule MquickjsEx.APITest do
       assert ScopedAPI.scope() == ["math"]
       assert NestedScopeAPI.scope() == ["utils", "math"]
       assert ScopeAsListAPI.scope() == ["helpers", "string"]
+    end
+  end
+
+  # ============================================================================
+  # Error Handling Tests
+  # ============================================================================
+
+  describe "load_api error handling" do
+    test "load_api returns error for non-API module" do
+      {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
+      {:error, reason} = MquickjsEx.load_api(ctx, String)
+      assert reason =~ "not a valid MquickjsEx.API"
+    end
+
+    test "load_api! raises for non-API module" do
+      {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
+
+      assert_raise MquickjsEx.RuntimeException, ~r/not a valid MquickjsEx.API/, fn ->
+        MquickjsEx.load_api!(ctx, String)
+      end
     end
   end
 

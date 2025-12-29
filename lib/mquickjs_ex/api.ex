@@ -12,7 +12,7 @@ defmodule MquickjsEx.API do
       end
 
       {:ok, ctx} = MquickjsEx.new()
-      ctx = MquickjsEx.load_api(ctx, MyAPI)
+      {:ok, ctx} = MquickjsEx.load_api(ctx, MyAPI)
       {:ok, 3} = MquickjsEx.eval(ctx, "add(1, 2)")
 
   ## Scoped APIs
