@@ -135,7 +135,7 @@ defmodule MathAPI do
 end
 
 {:ok, ctx} = MquickjsEx.new()
-ctx = MquickjsEx.load_api(ctx, MathAPI)
+{:ok, ctx} = MquickjsEx.load_api(ctx, MathAPI)
 
 {:ok, 5} = MquickjsEx.eval(ctx, "math.add(2, 3)")
 {:ok, 6} = MquickjsEx.eval(ctx, "math.multiply(2, 3)")
@@ -306,8 +306,8 @@ For the complete reference, see the [MQuickJS documentation](https://bellard.org
 
 | Function | Description |
 |----------|-------------|
-| `load_api/3` | Load an API module into the context |
-| `load_api!/3` | Load an API module, raises on error |
+| `load_api/3` | Load an API module, returns `{:ok, ctx}` or `{:error, reason}` |
+| `load_api!/3` | Load an API module, raises on error, returns `ctx` |
 
 ### Private Storage
 

@@ -193,6 +193,8 @@ defmodule MquickjsEx do
 
   The module must be defined using `use MquickjsEx.API`.
 
+  Returns `{:ok, ctx}` on success, or `{:error, reason}` on failure.
+
   ## Examples
 
       defmodule MathAPI do
@@ -202,37 +204,50 @@ defmodule MquickjsEx do
       end
 
       {:ok, ctx} = MquickjsEx.new()
-      ctx = MquickjsEx.load_api(ctx, MathAPI)
+      {:ok, ctx} = MquickjsEx.load_api(ctx, MathAPI)
       {:ok, 5} = MquickjsEx.eval(ctx, "math.add(2, 3)")
 
   """
   def load_api(%Context{} = ctx, module, data \\ nil) when is_atom(module) do
-    scope = module.scope()
-    functions = module.__js_functions__()
+    try do
+      scope = module.scope()
+      functions = module.__js_functions__()
 
-    # Register each function as a callback with metadata
-    ctx =
-      Enum.reduce(functions, ctx, fn {name, uses_state, variadic}, acc ->
-        full_name = build_full_name(scope, name)
-        # Create function reference with correct arity
-        fun = build_callback_fun(module, name, uses_state, variadic)
-        Context.put_callback_meta(acc, full_name, fun, uses_state, variadic)
-      end)
+      # Register each function as a callback with metadata
+      ctx =
+        Enum.reduce(functions, ctx, fn {name, uses_state, variadic}, acc ->
+          full_name = build_full_name(scope, name)
+          # Create function reference with correct arity
+          fun = build_callback_fun(module, name, uses_state, variadic)
+          Context.put_callback_meta(acc, full_name, fun, uses_state, variadic)
+        end)
 
-    # Track loaded API
-    ctx = Context.add_loaded_api(ctx, module)
+      # Track loaded API
+      ctx = Context.add_loaded_api(ctx, module)
 
-    # Run install callback if defined
-    MquickjsEx.API.install(ctx, module, scope, data)
+      # Run install callback if defined
+      {:ok, MquickjsEx.API.install(ctx, module, scope, data)}
+    rescue
+      e in UndefinedFunctionError ->
+        {:error, "Module #{inspect(module)} is not a valid MquickjsEx.API: #{Exception.message(e)}"}
+
+      e in RuntimeException ->
+        {:error, Exception.message(e)}
+    end
   end
 
   @doc """
   Load an API module into the JavaScript context, raising on error.
 
+  Returns the context for chaining.
+
   See `load_api/3` for details.
   """
   def load_api!(%Context{} = ctx, module, data \\ nil) when is_atom(module) do
-    load_api(ctx, module, data)
+    case load_api(ctx, module, data) do
+      {:ok, ctx} -> ctx
+      {:error, reason} -> raise_js_error(reason)
+    end
   end
 
   @doc """
