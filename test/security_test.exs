@@ -383,7 +383,7 @@ defmodule MquickjsEx.SecurityTest do
       {:ok, ctx} = MquickjsEx.new()
 
       # Register a simple callback - receives the array as a single argument
-      ctx = MquickjsEx.set!(ctx, :safeFunc, fn numbers -> Enum.sum(numbers) end)
+      ctx = MquickjsEx.set!(ctx, :safeFunc, fn [numbers] -> Enum.sum(numbers) end)
 
       # Test callback works correctly
       result = MquickjsEx.eval(ctx, "safeFunc([1, 2, 3])")
@@ -394,7 +394,7 @@ defmodule MquickjsEx.SecurityTest do
     test "callback receives only serializable data" do
       {:ok, ctx} = MquickjsEx.new()
 
-      ctx = MquickjsEx.set!(ctx, :inspect, fn arg ->
+      ctx = MquickjsEx.set!(ctx, :inspect, fn [arg] ->
         send(self(), {:received, arg})
         "ok"
       end)

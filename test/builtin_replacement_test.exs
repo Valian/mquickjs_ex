@@ -493,7 +493,7 @@ defmodule MquickjsEx.BuiltinReplacementTest do
     test "Elixir callback can be used as console.log replacement" do
       {:ok, ctx} = MquickjsEx.new()
 
-      ctx = MquickjsEx.set!(ctx, :elixirLog, fn args ->
+      ctx = MquickjsEx.set!(ctx, :elixirLog, fn [args] ->
         send(self(), {:log, args})
         nil
       end)
@@ -522,7 +522,7 @@ defmodule MquickjsEx.BuiltinReplacementTest do
     test "Elixir callback can replace Math.random" do
       {:ok, ctx} = MquickjsEx.new()
 
-      ctx = MquickjsEx.set!(ctx, :secureRandom, fn -> :rand.uniform() end)
+      ctx = MquickjsEx.set!(ctx, :secureRandom, fn [] -> :rand.uniform() end)
 
       {:ok, nil} = MquickjsEx.eval(ctx, "Math.random = secureRandom; undefined;")
 
@@ -540,7 +540,7 @@ defmodule MquickjsEx.BuiltinReplacementTest do
       # Using a simpler replacement pattern that works within memory constraints
       {:ok, ctx} = MquickjsEx.new(memory: 256 * 1024)
 
-      ctx = MquickjsEx.set!(ctx, :myCustomFunc, fn x ->
+      ctx = MquickjsEx.set!(ctx, :myCustomFunc, fn [x] ->
         send(self(), {:custom_called, x})
         x * 2
       end)
