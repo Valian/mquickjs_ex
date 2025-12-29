@@ -22,3 +22,7 @@ end
 ## License
 
 MIT
+
+### Third-Party Code
+
+This library includes vendored code from [mquickjs](https://github.com/bellard/mquickjs) (Micro QuickJS Javascript Engine) by Fabrice Bellard and Charlie Gordon, licensed under the MIT License. See `c_src/vendor/LICENSE` for details.
