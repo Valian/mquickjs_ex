@@ -1,51 +1,9 @@
 defmodule MquickjsEx do
-  @moduledoc """
-  MquickjsEx embeds MQuickJS (a minimal JavaScript engine) into Elixir via NIFs.
-
-  ## Basic Usage
-
-      {:ok, ctx} = MquickjsEx.new()
-      {:ok, result} = MquickjsEx.eval(ctx, "1 + 2")
-      # result => 3
-
-  ## Setting Values and Functions
-
-  Use `set/3` to set both values and functions:
-
-      {:ok, ctx} = MquickjsEx.new()
-      ctx = MquickjsEx.set!(ctx, :config, %{debug: true})
-      ctx = MquickjsEx.set!(ctx, :add, fn [a, b] -> a + b end)
-      {result, _} = MquickjsEx.eval!(ctx, "add(1, 2)")
-      # result => 3
-
-  ## Loading API Modules
-
-  Use `load_api/2` to load a module defined with `MquickjsEx.API`:
-
-      defmodule MathAPI do
-        use MquickjsEx.API, scope: "math"
-        defjs add(a, b), do: a + b
-      end
-
-      {:ok, ctx} = MquickjsEx.new()
-      ctx = MquickjsEx.load_api(ctx, MathAPI)
-      {:ok, 3} = MquickjsEx.eval(ctx, "math.add(1, 2)")
-
-  ## Type Conversions
-
-  | Elixir        | JavaScript |
-  |---------------|------------|
-  | `nil`         | `null`     |
-  | `true`/`false`| `true`/`false` |
-  | integers      | number (31-bit signed) |
-  | floats        | number     |
-  | binaries      | string     |
-  | atoms         | string     |
-  | lists         | Array      |
-  | maps          | Object     |
-  | functions     | callable (via trampoline) |
-
-  """
+  @external_resource "README.md"
+  @moduledoc @external_resource
+             |> File.read!()
+             |> String.split("<!-- MDOC !-->")
+             |> Enum.fetch!(1)
 
   alias MquickjsEx.Context
   alias MquickjsEx.NIF
@@ -188,7 +146,8 @@ defmodule MquickjsEx do
       {:ok, 3}
 
   """
-  def set(%Context{} = ctx, name, fun) when (is_atom(name) or is_binary(name)) and is_function(fun) do
+  def set(%Context{} = ctx, name, fun)
+      when (is_atom(name) or is_binary(name)) and is_function(fun) do
     {:ok, Context.put_callback(ctx, name, fun)}
   end
 
