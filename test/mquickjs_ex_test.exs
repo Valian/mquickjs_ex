@@ -636,4 +636,47 @@ defmodule MquickjsExTest do
       assert result == "User42"
     end
   end
+
+  describe "private storage" do
+    test "put_private and get_private" do
+      {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
+      ctx = MquickjsEx.put_private(ctx, :user_id, 123)
+      assert {:ok, 123} = MquickjsEx.get_private(ctx, :user_id)
+    end
+
+    test "get_private returns :error for missing key" do
+      {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
+      assert :error = MquickjsEx.get_private(ctx, :nonexistent)
+    end
+
+    test "get_private! raises for missing key" do
+      {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
+      assert_raise RuntimeError, ~r/private key.*does not exist/, fn ->
+        MquickjsEx.get_private!(ctx, :nonexistent)
+      end
+    end
+
+    test "get_private! returns value for existing key" do
+      {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
+      ctx = MquickjsEx.put_private(ctx, :data, %{foo: "bar"})
+      assert %{foo: "bar"} = MquickjsEx.get_private!(ctx, :data)
+    end
+
+    test "delete_private removes key" do
+      {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
+      ctx = MquickjsEx.put_private(ctx, :temp, "value")
+      assert {:ok, "value"} = MquickjsEx.get_private(ctx, :temp)
+      ctx = MquickjsEx.delete_private(ctx, :temp)
+      assert :error = MquickjsEx.get_private(ctx, :temp)
+    end
+
+    test "private storage is independent from JS context" do
+      {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
+      ctx = MquickjsEx.put_private(ctx, :secret, "hidden")
+      # JS can't see private storage
+      {:error, _} = MquickjsEx.eval(ctx, "secret")
+      # But Elixir can
+      assert {:ok, "hidden"} = MquickjsEx.get_private(ctx, :secret)
+    end
+  end
 end
