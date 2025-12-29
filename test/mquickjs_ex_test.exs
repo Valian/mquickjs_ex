@@ -286,7 +286,7 @@ defmodule MquickjsExTest do
 
     test "eval! raises on error" do
       {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
-      assert_raise RuntimeError, ~r/JS Error/, fn ->
+      assert_raise MquickjsEx.RuntimeException, ~r/JS Error/, fn ->
         MquickjsEx.eval!(ctx, "undefined_var")
       end
     end
