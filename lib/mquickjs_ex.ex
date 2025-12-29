@@ -14,7 +14,7 @@ defmodule MquickjsEx do
 
       {:ok, ctx} = MquickjsEx.new()
       ctx = MquickjsEx.set!(ctx, :config, %{debug: true})
-      ctx = MquickjsEx.set!(ctx, :add, fn [a, b] -> a + b end)
+      ctx = MquickjsEx.set!(ctx, :add, fn a, b -> a + b end)
       {result, _} = MquickjsEx.eval!(ctx, "add(1, 2)")
       # result => 3
 
@@ -162,8 +162,9 @@ defmodule MquickjsEx do
   The variable name can be an atom or string. The value is converted
   from Elixir to JavaScript according to the type conversion table.
 
-  If the value is a function (arity 1, receiving a list of arguments),
-  it becomes a callable JavaScript function via the trampoline pattern.
+  If the value is a function, it becomes a callable JavaScript function
+  via the trampoline pattern. The function's arity must match the number
+  of arguments passed from JavaScript.
 
   Returns `{:ok, ctx}` on success (with potentially updated context for functions),
   or `{:error, reason}` on failure.
@@ -178,12 +179,12 @@ defmodule MquickjsEx do
 
       # Setting a function
       iex> {:ok, ctx} = MquickjsEx.new()
-      iex> {:ok, ctx} = MquickjsEx.set(ctx, :add, fn [a, b] -> a + b end)
+      iex> {:ok, ctx} = MquickjsEx.set(ctx, :add, fn a, b -> a + b end)
       iex> MquickjsEx.eval(ctx, "add(1, 2)")
       {:ok, 3}
 
   """
-  def set(%Context{} = ctx, name, fun) when (is_atom(name) or is_binary(name)) and is_function(fun, 1) do
+  def set(%Context{} = ctx, name, fun) when (is_atom(name) or is_binary(name)) and is_function(fun) do
     {:ok, Context.put_callback(ctx, name, fun)}
   end
 
@@ -207,13 +208,13 @@ defmodule MquickjsEx do
       100
 
       iex> {:ok, ctx} = MquickjsEx.new()
-      iex> ctx = MquickjsEx.set!(ctx, :double, fn [x] -> x * 2 end)
+      iex> ctx = MquickjsEx.set!(ctx, :double, fn x -> x * 2 end)
       iex> {result, _} = MquickjsEx.eval!(ctx, "double(21)")
       iex> result
       42
 
   """
-  def set!(%Context{} = ctx, name, fun) when (is_atom(name) or is_binary(name)) and is_function(fun, 1) do
+  def set!(%Context{} = ctx, name, fun) when (is_atom(name) or is_binary(name)) and is_function(fun) do
     Context.put_callback(ctx, name, fun)
   end
 
@@ -287,7 +288,7 @@ defmodule MquickjsEx do
               {:ok, callback} when is_function(callback) ->
                 # Execute the callback
                 try do
-                  result = callback.(args)
+                  result = apply(callback, args)
                   # Add result to cache and re-run
                   run_loop(ctx, code, callbacks, cached_results ++ [result])
                 rescue
