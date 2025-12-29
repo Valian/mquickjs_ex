@@ -24,19 +24,20 @@ defmodule MquickjsEx.BuiltinReplacementTest do
 
       # Replace console.log with a function that captures arguments
       # Note: MQuickJS doesn't support rest parameters, use `arguments` object
-      result = MquickjsEx.eval(ctx, """
-        var captured = [];
-        console.log = function() {
-          var args = [];
-          for (var i = 0; i < arguments.length; i++) {
-            args.push(arguments[i]);
-          }
-          captured.push(args);
-        };
-        console.log("hello", "world");
-        console.log(42);
-        captured;
-      """)
+      result =
+        MquickjsEx.eval(ctx, """
+          var captured = [];
+          console.log = function() {
+            var args = [];
+            for (var i = 0; i < arguments.length; i++) {
+              args.push(arguments[i]);
+            }
+            captured.push(args);
+          };
+          console.log("hello", "world");
+          console.log(42);
+          captured;
+        """)
 
       assert {:ok, captured} = result
       assert captured == [["hello", "world"], [42]]
@@ -47,17 +48,18 @@ defmodule MquickjsEx.BuiltinReplacementTest do
 
       # First eval: replace console.log
       # Note: Add `undefined` at the end to avoid returning the function
-      {:ok, nil} = MquickjsEx.eval(ctx, """
-        var logs = [];
-        console.log = function() {
-          var args = [];
-          for (var i = 0; i < arguments.length; i++) {
-            args.push(arguments[i]);
-          }
-          logs.push(args.join(' '));
-        };
-        undefined;
-      """)
+      {:ok, nil} =
+        MquickjsEx.eval(ctx, """
+          var logs = [];
+          console.log = function() {
+            var args = [];
+            for (var i = 0; i < arguments.length; i++) {
+              args.push(arguments[i]);
+            }
+            logs.push(args.join(' '));
+          };
+          undefined;
+        """)
 
       # Second eval: use the replaced function
       {:ok, _} = MquickjsEx.eval(ctx, "console.log('test message')")
@@ -70,31 +72,32 @@ defmodule MquickjsEx.BuiltinReplacementTest do
     test "can replace entire console object" do
       {:ok, ctx} = MquickjsEx.new()
 
-      result = MquickjsEx.eval(ctx, """
-        var myConsole = {
-          logs: [],
-          log: function() {
-            var args = [];
-            for (var i = 0; i < arguments.length; i++) args.push(arguments[i]);
-            this.logs.push({type: 'log', args: args});
-          },
-          warn: function() {
-            var args = [];
-            for (var i = 0; i < arguments.length; i++) args.push(arguments[i]);
-            this.logs.push({type: 'warn', args: args});
-          },
-          error: function() {
-            var args = [];
-            for (var i = 0; i < arguments.length; i++) args.push(arguments[i]);
-            this.logs.push({type: 'error', args: args});
-          }
-        };
-        console = myConsole;
-        console.log("info");
-        console.warn("warning");
-        console.error("error");
-        console.logs;
-      """)
+      result =
+        MquickjsEx.eval(ctx, """
+          var myConsole = {
+            logs: [],
+            log: function() {
+              var args = [];
+              for (var i = 0; i < arguments.length; i++) args.push(arguments[i]);
+              this.logs.push({type: 'log', args: args});
+            },
+            warn: function() {
+              var args = [];
+              for (var i = 0; i < arguments.length; i++) args.push(arguments[i]);
+              this.logs.push({type: 'warn', args: args});
+            },
+            error: function() {
+              var args = [];
+              for (var i = 0; i < arguments.length; i++) args.push(arguments[i]);
+              this.logs.push({type: 'error', args: args});
+            }
+          };
+          console = myConsole;
+          console.log("info");
+          console.warn("warning");
+          console.error("error");
+          console.logs;
+        """)
 
       assert {:ok, logs} = result
       assert length(logs) == 3
@@ -112,13 +115,14 @@ defmodule MquickjsEx.BuiltinReplacementTest do
     test "can replace Math.sqrt" do
       {:ok, ctx} = MquickjsEx.new()
 
-      result = MquickjsEx.eval(ctx, """
-        var originalSqrt = Math.sqrt;
-        Math.sqrt = function(x) {
-          return originalSqrt(x) * 2;
-        };
-        Math.sqrt(16);
-      """)
+      result =
+        MquickjsEx.eval(ctx, """
+          var originalSqrt = Math.sqrt;
+          Math.sqrt = function(x) {
+            return originalSqrt(x) * 2;
+          };
+          Math.sqrt(16);
+        """)
 
       # Original sqrt(16) = 4, our fake returns 8
       assert {:ok, 8} = result
@@ -127,14 +131,15 @@ defmodule MquickjsEx.BuiltinReplacementTest do
     test "can replace Math.random with deterministic function" do
       {:ok, ctx} = MquickjsEx.new()
 
-      result = MquickjsEx.eval(ctx, """
-        var counter = 0;
-        Math.random = function() {
-          counter++;
-          return counter / 10;
-        };
-        [Math.random(), Math.random(), Math.random()];
-      """)
+      result =
+        MquickjsEx.eval(ctx, """
+          var counter = 0;
+          Math.random = function() {
+            counter++;
+            return counter / 10;
+          };
+          [Math.random(), Math.random(), Math.random()];
+        """)
 
       assert {:ok, [0.1, 0.2, 0.3]} = result
     end
@@ -142,14 +147,15 @@ defmodule MquickjsEx.BuiltinReplacementTest do
     test "can replace entire Math object" do
       {:ok, ctx} = MquickjsEx.new()
 
-      result = MquickjsEx.eval(ctx, """
-        Math = {
-          PI: 3,
-          sqrt: function(x) { return x; },
-          abs: function(x) { return x > 0 ? x : -x; }
-        };
-        [Math.PI, Math.sqrt(16), Math.abs(-5)];
-      """)
+      result =
+        MquickjsEx.eval(ctx, """
+          Math = {
+            PI: 3,
+            sqrt: function(x) { return x; },
+            abs: function(x) { return x > 0 ? x : -x; }
+          };
+          [Math.PI, Math.sqrt(16), Math.abs(-5)];
+        """)
 
       assert {:ok, [3, 16, 5]} = result
     end
@@ -163,13 +169,14 @@ defmodule MquickjsEx.BuiltinReplacementTest do
     test "can replace JSON.stringify" do
       {:ok, ctx} = MquickjsEx.new()
 
-      result = MquickjsEx.eval(ctx, """
-        var originalStringify = JSON.stringify;
-        JSON.stringify = function(obj) {
-          return "REDACTED";
-        };
-        JSON.stringify({secret: "password"});
-      """)
+      result =
+        MquickjsEx.eval(ctx, """
+          var originalStringify = JSON.stringify;
+          JSON.stringify = function(obj) {
+            return "REDACTED";
+          };
+          JSON.stringify({secret: "password"});
+        """)
 
       assert {:ok, "REDACTED"} = result
     end
@@ -177,12 +184,13 @@ defmodule MquickjsEx.BuiltinReplacementTest do
     test "can replace JSON.parse" do
       {:ok, ctx} = MquickjsEx.new()
 
-      result = MquickjsEx.eval(ctx, """
-        JSON.parse = function(str) {
-          return {replaced: true, original: str};
-        };
-        JSON.parse('{"foo": "bar"}');
-      """)
+      result =
+        MquickjsEx.eval(ctx, """
+          JSON.parse = function(str) {
+            return {replaced: true, original: str};
+          };
+          JSON.parse('{"foo": "bar"}');
+        """)
 
       assert {:ok, %{"replaced" => true, "original" => "{\"foo\": \"bar\"}"}} = result
     end
@@ -196,19 +204,20 @@ defmodule MquickjsEx.BuiltinReplacementTest do
     test "can replace Array.prototype.push" do
       {:ok, ctx} = MquickjsEx.new()
 
-      result = MquickjsEx.eval(ctx, """
-        var pushCount = 0;
-        var originalPush = Array.prototype.push;
-        Array.prototype.push = function() {
-          pushCount++;
-          return originalPush.apply(this, arguments);
-        };
-        var arr = [];
-        arr.push(1);
-        arr.push(2);
-        arr.push(3);
-        [arr, pushCount];
-      """)
+      result =
+        MquickjsEx.eval(ctx, """
+          var pushCount = 0;
+          var originalPush = Array.prototype.push;
+          Array.prototype.push = function() {
+            pushCount++;
+            return originalPush.apply(this, arguments);
+          };
+          var arr = [];
+          arr.push(1);
+          arr.push(2);
+          arr.push(3);
+          [arr, pushCount];
+        """)
 
       assert {:ok, [[1, 2, 3], 3]} = result
     end
@@ -216,16 +225,17 @@ defmodule MquickjsEx.BuiltinReplacementTest do
     test "can replace Array.prototype.map" do
       {:ok, ctx} = MquickjsEx.new()
 
-      result = MquickjsEx.eval(ctx, """
-        Array.prototype.map = function(fn) {
-          var result = [];
-          for (var i = 0; i < this.length; i++) {
-            result.push(fn(this[i], i) + "_mapped");
-          }
-          return result;
-        };
-        [1, 2, 3].map(function(x) { return x; });
-      """)
+      result =
+        MquickjsEx.eval(ctx, """
+          Array.prototype.map = function(fn) {
+            var result = [];
+            for (var i = 0; i < this.length; i++) {
+              result.push(fn(this[i], i) + "_mapped");
+            }
+            return result;
+          };
+          [1, 2, 3].map(function(x) { return x; });
+        """)
 
       assert {:ok, ["1_mapped", "2_mapped", "3_mapped"]} = result
     end
@@ -239,12 +249,13 @@ defmodule MquickjsEx.BuiltinReplacementTest do
     test "can replace String.prototype.toUpperCase" do
       {:ok, ctx} = MquickjsEx.new()
 
-      result = MquickjsEx.eval(ctx, """
-        String.prototype.toUpperCase = function() {
-          return this.split('').reverse().join('');
-        };
-        "hello".toUpperCase();
-      """)
+      result =
+        MquickjsEx.eval(ctx, """
+          String.prototype.toUpperCase = function() {
+            return this.split('').reverse().join('');
+          };
+          "hello".toUpperCase();
+        """)
 
       assert {:ok, "olleh"} = result
     end
@@ -252,12 +263,13 @@ defmodule MquickjsEx.BuiltinReplacementTest do
     test "can add custom methods to String.prototype" do
       {:ok, ctx} = MquickjsEx.new()
 
-      result = MquickjsEx.eval(ctx, """
-        String.prototype.reverse = function() {
-          return this.split('').reverse().join('');
-        };
-        "hello".reverse();
-      """)
+      result =
+        MquickjsEx.eval(ctx, """
+          String.prototype.reverse = function() {
+            return this.split('').reverse().join('');
+          };
+          "hello".reverse();
+        """)
 
       assert {:ok, "olleh"} = result
     end
@@ -273,16 +285,17 @@ defmodule MquickjsEx.BuiltinReplacementTest do
 
       # Object.keys returns something that doesn't serialize well in MQuickJS.
       # We can verify the replacement by testing the behavior indirectly
-      result = MquickjsEx.eval(ctx, """
-        var originalKeys = Object.keys;
-        var replacementCalled = false;
-        Object.keys = function(obj) {
-          replacementCalled = true;
-          return originalKeys(obj);
-        };
-        Object.keys({a: 1});
-        replacementCalled;
-      """)
+      result =
+        MquickjsEx.eval(ctx, """
+          var originalKeys = Object.keys;
+          var replacementCalled = false;
+          Object.keys = function(obj) {
+            replacementCalled = true;
+            return originalKeys(obj);
+          };
+          Object.keys({a: 1});
+          replacementCalled;
+        """)
 
       assert {:ok, true} = result
     end
@@ -290,18 +303,19 @@ defmodule MquickjsEx.BuiltinReplacementTest do
     test "can replace Object.assign" do
       {:ok, ctx} = MquickjsEx.new()
 
-      result = MquickjsEx.eval(ctx, """
-        Object.assign = function(target) {
-          for (var i = 1; i < arguments.length; i++) {
-            var source = arguments[i];
-            for (var key in source) {
-              target[key + "_custom"] = source[key];
+      result =
+        MquickjsEx.eval(ctx, """
+          Object.assign = function(target) {
+            for (var i = 1; i < arguments.length; i++) {
+              var source = arguments[i];
+              for (var key in source) {
+                target[key + "_custom"] = source[key];
+              }
             }
-          }
-          return target;
-        };
-        Object.assign({}, {a: 1, b: 2});
-      """)
+            return target;
+          };
+          Object.assign({}, {a: 1, b: 2});
+        """)
 
       assert {:ok, %{"a_custom" => 1, "b_custom" => 2}} = result
     end
@@ -315,13 +329,14 @@ defmodule MquickjsEx.BuiltinReplacementTest do
     test "can replace parseInt" do
       {:ok, ctx} = MquickjsEx.new()
 
-      result = MquickjsEx.eval(ctx, """
-        var originalParseInt = parseInt;
-        parseInt = function(str, radix) {
-          return originalParseInt(str, radix) + 1;
-        };
-        parseInt("10");
-      """)
+      result =
+        MquickjsEx.eval(ctx, """
+          var originalParseInt = parseInt;
+          parseInt = function(str, radix) {
+            return originalParseInt(str, radix) + 1;
+          };
+          parseInt("10");
+        """)
 
       assert {:ok, 11} = result
     end
@@ -329,12 +344,13 @@ defmodule MquickjsEx.BuiltinReplacementTest do
     test "can replace parseFloat" do
       {:ok, ctx} = MquickjsEx.new()
 
-      result = MquickjsEx.eval(ctx, """
-        parseFloat = function(str) {
-          return 0;
-        };
-        parseFloat("3.14");
-      """)
+      result =
+        MquickjsEx.eval(ctx, """
+          parseFloat = function(str) {
+            return 0;
+          };
+          parseFloat("3.14");
+        """)
 
       assert {:ok, 0} = result
     end
@@ -342,12 +358,13 @@ defmodule MquickjsEx.BuiltinReplacementTest do
     test "can replace isNaN" do
       {:ok, ctx} = MquickjsEx.new()
 
-      result = MquickjsEx.eval(ctx, """
-        isNaN = function(x) {
-          return false;
-        };
-        isNaN("not a number");
-      """)
+      result =
+        MquickjsEx.eval(ctx, """
+          isNaN = function(x) {
+            return false;
+          };
+          isNaN("not a number");
+        """)
 
       assert {:ok, false} = result
     end
@@ -361,18 +378,19 @@ defmodule MquickjsEx.BuiltinReplacementTest do
     test "can replace Error constructor" do
       {:ok, ctx} = MquickjsEx.new()
 
-      result = MquickjsEx.eval(ctx, """
-        var OriginalError = Error;
-        Error = function(message) {
-          var err = new OriginalError("CUSTOM: " + message);
-          return err;
-        };
-        try {
-          throw new Error("test");
-        } catch(e) {
-          e.message;
-        }
-      """)
+      result =
+        MquickjsEx.eval(ctx, """
+          var OriginalError = Error;
+          Error = function(message) {
+            var err = new OriginalError("CUSTOM: " + message);
+            return err;
+          };
+          try {
+            throw new Error("test");
+          } catch(e) {
+            e.message;
+          }
+        """)
 
       assert {:ok, "CUSTOM: test"} = result
     end
@@ -386,12 +404,13 @@ defmodule MquickjsEx.BuiltinReplacementTest do
     test "can replace Date.now" do
       {:ok, ctx} = MquickjsEx.new()
 
-      result = MquickjsEx.eval(ctx, """
-        Date.now = function() {
-          return 1234567890000;
-        };
-        Date.now();
-      """)
+      result =
+        MquickjsEx.eval(ctx, """
+          Date.now = function() {
+            return 1234567890000;
+          };
+          Date.now();
+        """)
 
       # MQuickJS returns floats for large numbers
       assert {:ok, value} = result
@@ -412,10 +431,11 @@ defmodule MquickjsEx.BuiltinReplacementTest do
       {:ok, ctx2} = MquickjsEx.new()
 
       # Replace Math.sqrt in ctx1 and verify replacement took effect
-      {:ok, nil} = MquickjsEx.eval(ctx1, """
-        Math.sqrt = function(x) { return x; };
-        undefined;
-      """)
+      {:ok, nil} =
+        MquickjsEx.eval(ctx1, """
+          Math.sqrt = function(x) { return x; };
+          undefined;
+        """)
 
       # ctx1 should have the replacement
       assert {:ok, 16} = MquickjsEx.eval(ctx1, "Math.sqrt(16)")
@@ -448,17 +468,18 @@ defmodule MquickjsEx.BuiltinReplacementTest do
     test "can restore original function if saved" do
       {:ok, ctx} = MquickjsEx.new()
 
-      result = MquickjsEx.eval(ctx, """
-        var originalSqrt = Math.sqrt;
-        Math.sqrt = function(x) { return 0; };
+      result =
+        MquickjsEx.eval(ctx, """
+          var originalSqrt = Math.sqrt;
+          Math.sqrt = function(x) { return 0; };
 
-        var broken = Math.sqrt(16);
+          var broken = Math.sqrt(16);
 
-        Math.sqrt = originalSqrt;
-        var fixed = Math.sqrt(16);
+          Math.sqrt = originalSqrt;
+          var fixed = Math.sqrt(16);
 
-        [broken, fixed];
-      """)
+          [broken, fixed];
+        """)
 
       assert {:ok, [0, 4]} = result
     end
@@ -467,11 +488,12 @@ defmodule MquickjsEx.BuiltinReplacementTest do
       {:ok, ctx} = MquickjsEx.new()
 
       # Replace
-      {:ok, nil} = MquickjsEx.eval(ctx, """
-        var originalAbs = Math.abs;
-        Math.abs = function(x) { return -999; };
-        undefined;
-      """)
+      {:ok, nil} =
+        MquickjsEx.eval(ctx, """
+          var originalAbs = Math.abs;
+          Math.abs = function(x) { return -999; };
+          undefined;
+        """)
 
       # Verify replaced
       assert {:ok, -999} = MquickjsEx.eval(ctx, "Math.abs(5)")
@@ -493,27 +515,30 @@ defmodule MquickjsEx.BuiltinReplacementTest do
     test "Elixir callback can be used as console.log replacement" do
       {:ok, ctx} = MquickjsEx.new()
 
-      ctx = MquickjsEx.set!(ctx, :elixirLog, fn [args] ->
-        send(self(), {:log, args})
-        nil
-      end)
+      ctx =
+        MquickjsEx.set!(ctx, :elixirLog, fn [args] ->
+          send(self(), {:log, args})
+          nil
+        end)
 
-      {:ok, nil} = MquickjsEx.eval(ctx, """
-        console.log = function() {
-          var args = [];
-          for (var i = 0; i < arguments.length; i++) {
-            args.push(arguments[i]);
-          }
-          elixirLog(args);
-        };
-        undefined;
-      """)
+      {:ok, nil} =
+        MquickjsEx.eval(ctx, """
+          console.log = function() {
+            var args = [];
+            for (var i = 0; i < arguments.length; i++) {
+              args.push(arguments[i]);
+            }
+            elixirLog(args);
+          };
+          undefined;
+        """)
 
-      {:ok, _} = MquickjsEx.eval(ctx, """
-        console.log("Hello from JS!");
-        console.log(1, 2, 3);
-        undefined;
-      """)
+      {:ok, _} =
+        MquickjsEx.eval(ctx, """
+          console.log("Hello from JS!");
+          console.log(1, 2, 3);
+          undefined;
+        """)
 
       assert_receive {:log, ["Hello from JS!"]}
       assert_receive {:log, [1, 2, 3]}
@@ -526,11 +551,12 @@ defmodule MquickjsEx.BuiltinReplacementTest do
 
       {:ok, nil} = MquickjsEx.eval(ctx, "Math.random = secureRandom; undefined;")
 
-      result = MquickjsEx.eval(ctx, """
-        var r1 = Math.random();
-        var r2 = Math.random();
-        r1 !== r2;
-      """)
+      result =
+        MquickjsEx.eval(ctx, """
+          var r1 = Math.random();
+          var r2 = Math.random();
+          r1 !== r2;
+        """)
 
       assert {:ok, true} = result
     end
@@ -540,10 +566,11 @@ defmodule MquickjsEx.BuiltinReplacementTest do
       # Using a simpler replacement pattern that works within memory constraints
       {:ok, ctx} = MquickjsEx.new(memory: 256 * 1024)
 
-      ctx = MquickjsEx.set!(ctx, :myCustomFunc, fn [x] ->
-        send(self(), {:custom_called, x})
-        x * 2
-      end)
+      ctx =
+        MquickjsEx.set!(ctx, :myCustomFunc, fn [x] ->
+          send(self(), {:custom_called, x})
+          x * 2
+        end)
 
       # Replace a builtin with our custom function directly
       {:ok, nil} = MquickjsEx.eval(ctx, "Math.floor = myCustomFunc; undefined;")
@@ -564,14 +591,15 @@ defmodule MquickjsEx.BuiltinReplacementTest do
       {:ok, ctx} = MquickjsEx.new()
 
       # Even if we replace eval, we can't escape the sandbox
-      result = MquickjsEx.eval(ctx, """
-        try {
-          var evil = Function('return this.process');
-          typeof evil();
-        } catch(e) {
-          "caught";
-        }
-      """)
+      result =
+        MquickjsEx.eval(ctx, """
+          try {
+            var evil = Function('return this.process');
+            typeof evil();
+          } catch(e) {
+            "caught";
+          }
+        """)
 
       assert {:ok, value} = result
       # Should be undefined or error, not object/function
@@ -582,28 +610,30 @@ defmodule MquickjsEx.BuiltinReplacementTest do
       {:ok, ctx} = MquickjsEx.new()
 
       # Test 1: Function constructor
-      result1 = MquickjsEx.eval(ctx, """
-        try {
-          var F = (function(){}).constructor;
-          var global = F('return this')();
-          typeof global.require;
-        } catch(e) {
-          "error";
-        }
-      """)
+      result1 =
+        MquickjsEx.eval(ctx, """
+          try {
+            var F = (function(){}).constructor;
+            var global = F('return this')();
+            typeof global.require;
+          } catch(e) {
+            "error";
+          }
+        """)
 
       assert {:ok, value1} = result1
       assert value1 in ["undefined", "error"]
 
       # Test 2: Through prototype chain
-      result2 = MquickjsEx.eval(ctx, """
-        try {
-          var global2 = Object.prototype.constructor.constructor('return this')();
-          typeof global2.process;
-        } catch(e2) {
-          "error";
-        }
-      """)
+      result2 =
+        MquickjsEx.eval(ctx, """
+          try {
+            var global2 = Object.prototype.constructor.constructor('return this')();
+            typeof global2.process;
+          } catch(e2) {
+            "error";
+          }
+        """)
 
       assert {:ok, value2} = result2
       assert value2 in ["undefined", "error"]
@@ -618,14 +648,15 @@ defmodule MquickjsEx.BuiltinReplacementTest do
     test "rest parameters are NOT supported" do
       {:ok, ctx} = MquickjsEx.new()
 
-      result = MquickjsEx.eval(ctx, """
-        try {
-          eval("function f(...args) { return args; }");
-          "supported";
-        } catch(e) {
-          "not supported";
-        }
-      """)
+      result =
+        MquickjsEx.eval(ctx, """
+          try {
+            eval("function f(...args) { return args; }");
+            "supported";
+          } catch(e) {
+            "not supported";
+          }
+        """)
 
       # Should error because rest params aren't supported
       assert match?({:error, _}, result)
@@ -634,16 +665,17 @@ defmodule MquickjsEx.BuiltinReplacementTest do
     test "arguments object works as alternative to rest params" do
       {:ok, ctx} = MquickjsEx.new()
 
-      result = MquickjsEx.eval(ctx, """
-        function collectArgs() {
-          var args = [];
-          for (var i = 0; i < arguments.length; i++) {
-            args.push(arguments[i]);
+      result =
+        MquickjsEx.eval(ctx, """
+          function collectArgs() {
+            var args = [];
+            for (var i = 0; i < arguments.length; i++) {
+              args.push(arguments[i]);
+            }
+            return args;
           }
-          return args;
-        }
-        collectArgs(1, 2, 3, "four");
-      """)
+          collectArgs(1, 2, 3, "four");
+        """)
 
       assert {:ok, [1, 2, 3, "four"]} = result
     end

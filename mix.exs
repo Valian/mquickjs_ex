@@ -5,7 +5,7 @@ defmodule MquickjsEx.MixProject do
     [
       app: :mquickjs_ex,
       version: "0.1.0",
-      elixir: "~> 1.19",
+      elixir: "~> 1.16",
       start_permanent: Mix.env() == :prod,
       compilers: [:elixir_make] ++ Mix.compilers(),
       make_targets: ["all"],

@@ -11,6 +11,7 @@ defmodule MquickjsEx.SecurityTest do
   # Helper to check if something is undefined (not available)
   defp assert_undefined(ctx, expr) do
     result = MquickjsEx.eval(ctx, "typeof #{expr}")
+
     assert result == {:ok, "undefined"},
            "Expected #{expr} to be undefined, got: #{inspect(result)}"
   end
@@ -64,8 +65,12 @@ defmodule MquickjsEx.SecurityTest do
       result = MquickjsEx.eval(ctx, ~s|load("/etc/passwd")|)
       # Should either error or return undefined (not file contents)
       case result do
-        {:error, _} -> assert true
-        {:ok, nil} -> assert true
+        {:error, _} ->
+          assert true
+
+        {:ok, nil} ->
+          assert true
+
         {:ok, value} ->
           # If it returns something, it should NOT be file contents
           refute is_binary(value) and String.contains?(value, "root")
@@ -148,14 +153,16 @@ defmodule MquickjsEx.SecurityTest do
     test "Function constructor cannot access external scope" do
       {:ok, ctx} = MquickjsEx.new()
       # This is a common sandbox escape - trying to access global through Function
-      result = MquickjsEx.eval(ctx, """
-        try {
-          var f = new Function('return this')();
-          typeof f.process;
-        } catch(e) {
-          "error";
-        }
-      """)
+      result =
+        MquickjsEx.eval(ctx, """
+          try {
+            var f = new Function('return this')();
+            typeof f.process;
+          } catch(e) {
+            "error";
+          }
+        """)
+
       # Should return undefined or error, not access to process
       assert {:ok, value} = result
       assert value in [nil, "error", "undefined"]
@@ -172,13 +179,15 @@ defmodule MquickjsEx.SecurityTest do
     test "indirect eval works but is sandboxed" do
       {:ok, ctx} = MquickjsEx.new()
       # Indirect eval (1,eval)(...) may work
-      result = MquickjsEx.eval(ctx, """
-        try {
-          (1, eval)("typeof process");
-        } catch(e) {
-          "error: " + e.message;
-        }
-      """)
+      result =
+        MquickjsEx.eval(ctx, """
+          try {
+            (1, eval)("typeof process");
+          } catch(e) {
+            "error: " + e.message;
+          }
+        """)
+
       # If it works, it should return "undefined" (process not available)
       # If it errors, that's also fine
       assert {:ok, value} = result
@@ -196,19 +205,20 @@ defmodule MquickjsEx.SecurityTest do
       {:ok, ctx} = MquickjsEx.new(memory: 32768)
 
       # Try to allocate a very large array - should fail gracefully
-      result = MquickjsEx.eval(ctx, """
-        try {
-          var arr = [];
-          for (var i = 0; i < 100000; i++) {
-            var s = "";
-            for (var j = 0; j < 100; j++) s += "x";
-            arr.push(s);
+      result =
+        MquickjsEx.eval(ctx, """
+          try {
+            var arr = [];
+            for (var i = 0; i < 100000; i++) {
+              var s = "";
+              for (var j = 0; j < 100; j++) s += "x";
+              arr.push(s);
+            }
+            "success";
+          } catch(e) {
+            "error: " + e.message;
           }
-          "success";
-        } catch(e) {
-          "error: " + e.message;
-        }
-      """)
+        """)
 
       # Should error out, not succeed
       assert {:ok, value} = result
@@ -220,19 +230,20 @@ defmodule MquickjsEx.SecurityTest do
 
       # This should either timeout or run out of memory
       # Note: MQuickJS doesn't have built-in timeout, so this tests memory limits
-      result = MquickjsEx.eval(ctx, """
-        try {
-          var i = 0;
-          var arr = [];
-          while(true) {
-            arr.push(i++);
-            if (i > 10000) break; // Safety valve for test
+      result =
+        MquickjsEx.eval(ctx, """
+          try {
+            var i = 0;
+            var arr = [];
+            while(true) {
+              arr.push(i++);
+              if (i > 10000) break; // Safety valve for test
+            }
+            i;
+          } catch(e) {
+            "error: " + e.message;
           }
-          i;
-        } catch(e) {
-          "error: " + e.message;
-        }
-      """)
+        """)
 
       # Should complete (with safety valve) or error
       assert {:ok, _value} = result
@@ -313,14 +324,16 @@ defmodule MquickjsEx.SecurityTest do
   describe "prototype pollution protection" do
     test "cannot pollute Object prototype to escape" do
       {:ok, ctx} = MquickjsEx.new()
-      result = MquickjsEx.eval(ctx, """
-        try {
-          Object.prototype.polluted = function() { return this.constructor.constructor('return process')(); };
-          ({}).polluted();
-        } catch(e) {
-          "caught: " + e.message;
-        }
-      """)
+
+      result =
+        MquickjsEx.eval(ctx, """
+          try {
+            Object.prototype.polluted = function() { return this.constructor.constructor('return process')(); };
+            ({}).polluted();
+          } catch(e) {
+            "caught: " + e.message;
+          }
+        """)
 
       # Should not return process object
       assert {:ok, value} = result
@@ -329,15 +342,17 @@ defmodule MquickjsEx.SecurityTest do
 
     test "cannot modify __proto__ to escape" do
       {:ok, ctx} = MquickjsEx.new()
-      result = MquickjsEx.eval(ctx, """
-        try {
-          var obj = {};
-          obj.__proto__.exec = function() { return typeof process; };
-          obj.exec();
-        } catch(e) {
-          "caught";
-        }
-      """)
+
+      result =
+        MquickjsEx.eval(ctx, """
+          try {
+            var obj = {};
+            obj.__proto__.exec = function() { return typeof process; };
+            obj.exec();
+          } catch(e) {
+            "caught";
+          }
+        """)
 
       assert {:ok, value} = result
       # Should be undefined or error, not "object"
@@ -353,9 +368,11 @@ defmodule MquickjsEx.SecurityTest do
     test "gc function exists but is safe" do
       {:ok, ctx} = MquickjsEx.new()
       # gc() should exist and not crash
-      result = MquickjsEx.eval(ctx, """
-        typeof gc === 'function' ? gc() : 'no gc';
-      """)
+      result =
+        MquickjsEx.eval(ctx, """
+          typeof gc === 'function' ? gc() : 'no gc';
+        """)
+
       assert {:ok, _} = result
     end
 
@@ -394,10 +411,11 @@ defmodule MquickjsEx.SecurityTest do
     test "callback receives only serializable data" do
       {:ok, ctx} = MquickjsEx.new()
 
-      ctx = MquickjsEx.set!(ctx, :inspect, fn [arg] ->
-        send(self(), {:received, arg})
-        "ok"
-      end)
+      ctx =
+        MquickjsEx.set!(ctx, :inspect, fn [arg] ->
+          send(self(), {:received, arg})
+          "ok"
+        end)
 
       MquickjsEx.eval(ctx, """
         inspect([1, "hello", true, null, {key: "value"}]);
@@ -426,29 +444,36 @@ defmodule MquickjsEx.SecurityTest do
     end
 
     test "handles very long strings via loop" do
-      {:ok, ctx} = MquickjsEx.new(memory: 1024 * 1024)  # 1MB
+      # 1MB
+      {:ok, ctx} = MquickjsEx.new(memory: 1024 * 1024)
       # String.prototype.repeat may not be available in MQuickJS, use loop
-      result = MquickjsEx.eval(ctx, """
-        var s = "";
-        for (var i = 0; i < 10000; i++) s += "x";
-        s.length;
-      """)
+      result =
+        MquickjsEx.eval(ctx, """
+          var s = "";
+          for (var i = 0; i < 10000; i++) s += "x";
+          s.length;
+        """)
+
       assert {:ok, 10000} = result
     end
 
     test "handles deep recursion" do
-      {:ok, ctx} = MquickjsEx.new(memory: 1024 * 256)  # 256KB
-      result = MquickjsEx.eval(ctx, """
-        function recurse(n) {
-          if (n <= 0) return 0;
-          return 1 + recurse(n - 1);
-        }
-        try {
-          recurse(100);
-        } catch(e) {
-          "stack overflow";
-        }
-      """)
+      # 256KB
+      {:ok, ctx} = MquickjsEx.new(memory: 1024 * 256)
+
+      result =
+        MquickjsEx.eval(ctx, """
+          function recurse(n) {
+            if (n <= 0) return 0;
+            return 1 + recurse(n - 1);
+          }
+          try {
+            recurse(100);
+          } catch(e) {
+            "stack overflow";
+          }
+        """)
+
       # Should either complete or error gracefully
       assert {:ok, value} = result
       assert value == 100 or value == "stack overflow"

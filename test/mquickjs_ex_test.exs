@@ -135,6 +135,7 @@ defmodule MquickjsExTest do
 
     test "eval returns nested objects" do
       {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
+
       assert {:ok, %{"outer" => %{"inner" => 42}}} =
                MquickjsEx.eval(ctx, "({outer: {inner: 42}})")
     end
@@ -146,6 +147,7 @@ defmodule MquickjsExTest do
 
     test "functions are not serializable" do
       {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
+
       assert {:error, :function_not_serializable} =
                MquickjsEx.eval(ctx, "(function() {})")
     end
@@ -199,6 +201,7 @@ defmodule MquickjsExTest do
 
     test "set and get nested structure" do
       {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
+
       data = %{
         "users" => [
           %{"name" => "Alice", "age" => 30},
@@ -286,6 +289,7 @@ defmodule MquickjsExTest do
 
     test "eval! raises on error" do
       {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
+
       assert_raise MquickjsEx.RuntimeException, ~r/JS Error/, fn ->
         MquickjsEx.eval!(ctx, "undefined_var")
       end
@@ -392,10 +396,12 @@ defmodule MquickjsExTest do
     test "same callback called multiple times" do
       {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
       counter = :counters.new(1, [])
-      ctx = MquickjsEx.set!(ctx, :next, fn [] ->
-        :counters.add(counter, 1, 1)
-        :counters.get(counter, 1)
-      end)
+
+      ctx =
+        MquickjsEx.set!(ctx, :next, fn [] ->
+          :counters.add(counter, 1, 1)
+          :counters.get(counter, 1)
+        end)
 
       code = """
       var a = next();
@@ -524,9 +530,11 @@ defmodule MquickjsExTest do
   describe "complex callback scenarios" do
     test "simulated HTTP fetch pattern" do
       {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
-      ctx = MquickjsEx.set!(ctx, :fetch_data, fn [url] ->
-        %{"url" => url, "status" => 200, "body" => "response from #{url}"}
-      end)
+
+      ctx =
+        MquickjsEx.set!(ctx, :fetch_data, fn [url] ->
+          %{"url" => url, "status" => 200, "body" => "response from #{url}"}
+        end)
 
       code = """
       var response = fetch_data("https://api.example.com/data");
@@ -554,9 +562,11 @@ defmodule MquickjsExTest do
 
     test "JSON parsing pattern" do
       {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
-      ctx = MquickjsEx.set!(ctx, :fetch_json, fn [_url] ->
-        ~s|{"items": [1, 2, 3], "count": 3}|
-      end)
+
+      ctx =
+        MquickjsEx.set!(ctx, :fetch_json, fn [_url] ->
+          ~s|{"items": [1, 2, 3], "count": 3}|
+        end)
 
       code = """
       var json_str = fetch_json("http://example.com");
@@ -628,9 +638,11 @@ defmodule MquickjsExTest do
 
     test "function with complex return value" do
       {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
-      ctx = MquickjsEx.set!(ctx, :get_user, fn [id] ->
-        %{"id" => id, "name" => "User#{id}", "active" => true}
-      end)
+
+      ctx =
+        MquickjsEx.set!(ctx, :get_user, fn [id] ->
+          %{"id" => id, "name" => "User#{id}", "active" => true}
+        end)
 
       {result, _ctx} = MquickjsEx.eval!(ctx, "get_user(42).name")
       assert result == "User42"
@@ -651,6 +663,7 @@ defmodule MquickjsExTest do
 
     test "get_private! raises for missing key" do
       {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
+
       assert_raise RuntimeError, ~r/private key.*does not exist/, fn ->
         MquickjsEx.get_private!(ctx, :nonexistent)
       end

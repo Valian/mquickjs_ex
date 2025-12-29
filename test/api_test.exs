@@ -11,29 +11,29 @@ defmodule MquickjsEx.APITest do
   defmodule BasicAPI do
     use MquickjsEx.API
 
-    defjs add(a, b), do: a + b
-    defjs multiply(a, b), do: a * b
-    defjs greet(name), do: "Hello, #{name}!"
+    defjs(add(a, b), do: a + b)
+    defjs(multiply(a, b), do: a * b)
+    defjs(greet(name), do: "Hello, #{name}!")
   end
 
   defmodule ScopedAPI do
     use MquickjsEx.API, scope: "math"
 
-    defjs add(a, b), do: a + b
-    defjs subtract(a, b), do: a - b
+    defjs(add(a, b), do: a + b)
+    defjs(subtract(a, b), do: a - b)
   end
 
   defmodule NestedScopeAPI do
     use MquickjsEx.API, scope: "utils.math"
 
-    defjs divide(a, b), do: a / b
+    defjs(divide(a, b), do: a / b)
   end
 
   defmodule ScopeAsListAPI do
     use MquickjsEx.API, scope: [:helpers, :string]
 
-    defjs upcase(s), do: String.upcase(s)
-    defjs downcase(s), do: String.downcase(s)
+    defjs(upcase(s), do: String.upcase(s))
+    defjs(downcase(s), do: String.downcase(s))
   end
 
   defmodule StateAccessAPI do
@@ -59,13 +59,13 @@ defmodule MquickjsEx.APITest do
     use MquickjsEx.API
 
     @variadic true
-    defjs sum(args), do: Enum.sum(args)
+    defjs(sum(args), do: Enum.sum(args))
 
     @variadic true
-    defjs join(args), do: Enum.join(args, " ")
+    defjs(join(args), do: Enum.join(args, " "))
 
     # Non-variadic function after variadic ones
-    defjs double(x), do: x * 2
+    defjs(double(x), do: x * 2)
   end
 
   defmodule VariadicWithStateAPI do
@@ -82,24 +82,24 @@ defmodule MquickjsEx.APITest do
   defmodule GuardAPI do
     use MquickjsEx.API
 
-    defjs double(x) when is_number(x), do: x * 2
-    defjs double(x) when is_binary(x), do: x <> x
+    defjs(double(x) when is_number(x), do: x * 2)
+    defjs(double(x) when is_binary(x), do: x <> x)
   end
 
   defmodule DestructuringAPI do
     use MquickjsEx.API
 
-    defjs first([head | _tail]), do: head
-    defjs first([]), do: nil
+    defjs(first([head | _tail]), do: head)
+    defjs(first([]), do: nil)
 
-    defjs get_name(%{"name" => name}), do: name
-    defjs get_name(_), do: "unknown"
+    defjs(get_name(%{"name" => name}), do: name)
+    defjs(get_name(_), do: "unknown")
   end
 
   defmodule InstallAPI do
     use MquickjsEx.API, scope: "installed"
 
-    defjs get_version, do: 42
+    defjs(get_version, do: 42)
 
     @impl MquickjsEx.API
     def install(ctx, _scope, _data) do
@@ -110,7 +110,7 @@ defmodule MquickjsEx.APITest do
   defmodule InstallWithCodeAPI do
     use MquickjsEx.API
 
-    defjs get_constant, do: "from elixir"
+    defjs(get_constant, do: "from elixir")
 
     @impl MquickjsEx.API
     def install(_ctx, _scope, _data) do
