@@ -55,7 +55,8 @@ defmodule MquickjsEx.MixProject do
     [
       {:elixir_make, "~> 0.8", runtime: false},
       {:jason, "~> 1.4"},
-      {:ex_doc, "~> 0.31", only: :dev, runtime: false}
+      {:ex_doc, "~> 0.31", only: :dev, runtime: false},
+      {:easy_publish, "~> 0.1", only: :dev, runtime: false}
     ]
   end
 end
