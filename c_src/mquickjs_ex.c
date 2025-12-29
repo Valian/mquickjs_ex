@@ -772,31 +772,71 @@ static ERL_NIF_TERM nif_get(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
     return enif_make_tuple2(env, enif_make_atom(env, "ok"), result);
 }
 
-/* Set a global variable */
-static ERL_NIF_TERM nif_set(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
+/* Set a value at a path in the global object */
+static ERL_NIF_TERM nif_set_path(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
 {
     JsContext *js;
     if (!enif_get_resource(env, argv[0], JS_CONTEXT_TYPE, (void **)&js)) {
         return enif_make_badarg(env);
     }
 
-    /* Get the variable name */
-    char name_buf[256];
-    ErlNifBinary name_bin;
+    /* argv[1] = list of keys (atoms or binaries) */
+    /* argv[2] = value to set */
 
-    if (enif_inspect_binary(env, argv[1], &name_bin)) {
-        if (name_bin.size >= sizeof(name_buf)) {
-            return enif_make_badarg(env);
-        }
-        memcpy(name_buf, name_bin.data, name_bin.size);
-        name_buf[name_bin.size] = '\0';
-    } else if (enif_get_atom(env, argv[1], name_buf, sizeof(name_buf), ERL_NIF_LATIN1)) {
-        /* Already null-terminated */
-    } else {
+    unsigned path_len;
+    if (!enif_get_list_length(env, argv[1], &path_len) || path_len == 0) {
         return enif_make_badarg(env);
     }
 
-    /* Convert Elixir value to JS */
+    /* Extract keys into array - max 32 levels, 256 chars per key */
+    char keys[32][256];
+    if (path_len > 32) {
+        return enif_make_badarg(env);
+    }
+
+    ERL_NIF_TERM list = argv[1];
+    ERL_NIF_TERM head;
+    for (unsigned i = 0; i < path_len; i++) {
+        if (!enif_get_list_cell(env, list, &head, &list)) {
+            return enif_make_badarg(env);
+        }
+        /* Get key as string (atom or binary) */
+        ErlNifBinary bin;
+        if (enif_inspect_binary(env, head, &bin)) {
+            if (bin.size >= 256) return enif_make_badarg(env);
+            memcpy(keys[i], bin.data, bin.size);
+            keys[i][bin.size] = '\0';
+        } else if (!enif_get_atom(env, head, keys[i], 256, ERL_NIF_LATIN1)) {
+            return enif_make_badarg(env);
+        }
+    }
+
+    /* Walk path, creating objects as needed */
+    JSValue current = JS_GetGlobalObject(js->ctx);
+
+    for (unsigned i = 0; i < path_len - 1; i++) {
+        JSValue next = JS_GetPropertyStr(js->ctx, current, keys[i]);
+
+        if (JS_IsUndefined(next) || JS_IsNull(next)) {
+            /* Create new object and set it on current */
+            next = JS_NewObject(js->ctx);
+            JS_SetPropertyStr(js->ctx, current, keys[i], next);
+        } else {
+            /* Check if it's a plain object (not array, function, etc.) */
+            int class_id = JS_GetClassID(js->ctx, next);
+            if (class_id != JS_CLASS_OBJECT) {
+                const char *msg = "cannot set nested path: intermediate is not an object";
+                ERL_NIF_TERM binary;
+                unsigned char *data = enif_make_new_binary(env, strlen(msg), &binary);
+                memcpy(data, msg, strlen(msg));
+                return enif_make_tuple2(env, enif_make_atom(env, "error"), binary);
+            }
+        }
+
+        current = next;
+    }
+
+    /* Set final value */
     JSValue js_val = erl_to_js(env, js->ctx, argv[2], 0);
 
     if (JS_IsException(js_val)) {
@@ -818,9 +858,7 @@ static ERL_NIF_TERM nif_set(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
             enif_make_atom(env, "conversion_failed"));
     }
 
-    /* Set on global object */
-    JSValue global = JS_GetGlobalObject(js->ctx);
-    JSValue set_result = JS_SetPropertyStr(js->ctx, global, name_buf, js_val);
+    JSValue set_result = JS_SetPropertyStr(js->ctx, current, keys[path_len - 1], js_val);
 
     if (JS_IsException(set_result)) {
         return enif_make_tuple2(env,
@@ -1091,7 +1129,7 @@ static ErlNifFunc nif_funcs[] = {
     {"nif_new", 1, nif_new, 0},
     {"nif_eval", 2, nif_eval, 0},
     {"nif_get", 2, nif_get, 0},
-    {"nif_set", 3, nif_set, 0},
+    {"nif_set_path", 3, nif_set_path, 0},
     {"nif_gc", 1, nif_gc, 0},
     {"nif_run", 3, nif_run, 0},
 };

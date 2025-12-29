@@ -314,42 +314,42 @@ defmodule MquickjsExTest do
   describe "basic callback invocation" do
     test "single callback" do
       {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
-      ctx = MquickjsEx.set!(ctx, :double, fn x -> x * 2 end)
+      ctx = MquickjsEx.set!(ctx, :double, fn [x] -> x * 2 end)
       {:ok, result} = MquickjsEx.eval(ctx, "double(21)")
       assert result == 42
     end
 
     test "callback returning string" do
       {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
-      ctx = MquickjsEx.set!(ctx, :greet, fn name -> "Hello, #{name}!" end)
+      ctx = MquickjsEx.set!(ctx, :greet, fn [name] -> "Hello, #{name}!" end)
       {:ok, result} = MquickjsEx.eval(ctx, ~s|greet("World")|)
       assert result == "Hello, World!"
     end
 
     test "callback returning list" do
       {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
-      ctx = MquickjsEx.set!(ctx, :get_items, fn -> [1, 2, 3] end)
+      ctx = MquickjsEx.set!(ctx, :get_items, fn [] -> [1, 2, 3] end)
       {:ok, result} = MquickjsEx.eval(ctx, "get_items()")
       assert result == [1, 2, 3]
     end
 
     test "callback returning map" do
       {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
-      ctx = MquickjsEx.set!(ctx, :get_user, fn id -> %{"id" => id, "name" => "Alice"} end)
+      ctx = MquickjsEx.set!(ctx, :get_user, fn [id] -> %{"id" => id, "name" => "Alice"} end)
       {:ok, result} = MquickjsEx.eval(ctx, "get_user(1)")
       assert result == %{"id" => 1, "name" => "Alice"}
     end
 
     test "callback with multiple arguments" do
       {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
-      ctx = MquickjsEx.set!(ctx, :add, fn a, b -> a + b end)
+      ctx = MquickjsEx.set!(ctx, :add, fn [a, b] -> a + b end)
       {:ok, result} = MquickjsEx.eval(ctx, "add(10, 32)")
       assert result == 42
     end
 
     test "callback with no arguments" do
       {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
-      ctx = MquickjsEx.set!(ctx, :get_answer, fn -> 42 end)
+      ctx = MquickjsEx.set!(ctx, :get_answer, fn [] -> 42 end)
       {:ok, result} = MquickjsEx.eval(ctx, "get_answer()")
       assert result == 42
     end
@@ -358,8 +358,8 @@ defmodule MquickjsExTest do
   describe "multiple sequential callbacks" do
     test "two callbacks in sequence" do
       {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
-      ctx = MquickjsEx.set!(ctx, :fetch_a, fn -> 10 end)
-      ctx = MquickjsEx.set!(ctx, :fetch_b, fn -> 20 end)
+      ctx = MquickjsEx.set!(ctx, :fetch_a, fn [] -> 10 end)
+      ctx = MquickjsEx.set!(ctx, :fetch_b, fn [] -> 20 end)
 
       code = """
       var a = fetch_a();
@@ -373,9 +373,9 @@ defmodule MquickjsExTest do
 
     test "three callbacks in sequence" do
       {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
-      ctx = MquickjsEx.set!(ctx, :step1, fn -> 1 end)
-      ctx = MquickjsEx.set!(ctx, :step2, fn x -> x * 2 end)
-      ctx = MquickjsEx.set!(ctx, :step3, fn x -> x + 10 end)
+      ctx = MquickjsEx.set!(ctx, :step1, fn [] -> 1 end)
+      ctx = MquickjsEx.set!(ctx, :step2, fn [x] -> x * 2 end)
+      ctx = MquickjsEx.set!(ctx, :step3, fn [x] -> x + 10 end)
 
       code = """
       var a = step1();
@@ -392,7 +392,7 @@ defmodule MquickjsExTest do
     test "same callback called multiple times" do
       {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
       counter = :counters.new(1, [])
-      ctx = MquickjsEx.set!(ctx, :next, fn ->
+      ctx = MquickjsEx.set!(ctx, :next, fn [] ->
         :counters.add(counter, 1, 1)
         :counters.get(counter, 1)
       end)
@@ -412,21 +412,21 @@ defmodule MquickjsExTest do
   describe "callback result used in computations" do
     test "callback result used in arithmetic" do
       {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
-      ctx = MquickjsEx.set!(ctx, :get_base, fn -> 100 end)
+      ctx = MquickjsEx.set!(ctx, :get_base, fn [] -> 100 end)
       {:ok, result} = MquickjsEx.eval(ctx, "get_base() * 2 + 5")
       assert result == 205
     end
 
     test "callback result used in string concatenation" do
       {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
-      ctx = MquickjsEx.set!(ctx, :get_name, fn -> "World" end)
+      ctx = MquickjsEx.set!(ctx, :get_name, fn [] -> "World" end)
       {:ok, result} = MquickjsEx.eval(ctx, ~s|"Hello, " + get_name() + "!"|)
       assert result == "Hello, World!"
     end
 
     test "callback result used in array operations" do
       {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
-      ctx = MquickjsEx.set!(ctx, :get_items, fn -> [1, 2, 3] end)
+      ctx = MquickjsEx.set!(ctx, :get_items, fn [] -> [1, 2, 3] end)
 
       code = """
       var items = get_items();
@@ -440,7 +440,7 @@ defmodule MquickjsExTest do
 
     test "callback result used in object operations" do
       {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
-      ctx = MquickjsEx.set!(ctx, :get_config, fn -> %{"debug" => false} end)
+      ctx = MquickjsEx.set!(ctx, :get_config, fn [] -> %{"debug" => false} end)
 
       code = """
       var config = get_config();
@@ -457,8 +457,8 @@ defmodule MquickjsExTest do
   describe "nested callbacks" do
     test "callback in conditional branch" do
       {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
-      ctx = MquickjsEx.set!(ctx, :should_proceed, fn -> true end)
-      ctx = MquickjsEx.set!(ctx, :get_value, fn -> 42 end)
+      ctx = MquickjsEx.set!(ctx, :should_proceed, fn [] -> true end)
+      ctx = MquickjsEx.set!(ctx, :get_value, fn [] -> 42 end)
 
       code = """
       if (should_proceed()) {
@@ -474,7 +474,7 @@ defmodule MquickjsExTest do
 
     test "callback in loop" do
       {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
-      ctx = MquickjsEx.set!(ctx, :get_item, fn i -> i * 10 end)
+      ctx = MquickjsEx.set!(ctx, :get_item, fn [i] -> i * 10 end)
 
       code = """
       var sum = 0;
@@ -491,8 +491,8 @@ defmodule MquickjsExTest do
 
     test "callback result passed to another callback" do
       {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
-      ctx = MquickjsEx.set!(ctx, :fetch_id, fn -> 42 end)
-      ctx = MquickjsEx.set!(ctx, :fetch_user, fn id -> %{"id" => id, "name" => "User#{id}"} end)
+      ctx = MquickjsEx.set!(ctx, :fetch_id, fn [] -> 42 end)
+      ctx = MquickjsEx.set!(ctx, :fetch_user, fn [id] -> %{"id" => id, "name" => "User#{id}"} end)
 
       code = """
       var id = fetch_id();
@@ -514,7 +514,7 @@ defmodule MquickjsExTest do
 
     test "callback exception is caught" do
       {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
-      ctx = MquickjsEx.set!(ctx, :fail, fn -> raise "intentional error" end)
+      ctx = MquickjsEx.set!(ctx, :fail, fn [] -> raise "intentional error" end)
       {:error, reason} = MquickjsEx.eval(ctx, "fail()")
       assert reason =~ "Callback error"
       assert reason =~ "intentional error"
@@ -524,7 +524,7 @@ defmodule MquickjsExTest do
   describe "complex callback scenarios" do
     test "simulated HTTP fetch pattern" do
       {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
-      ctx = MquickjsEx.set!(ctx, :fetch_data, fn url ->
+      ctx = MquickjsEx.set!(ctx, :fetch_data, fn [url] ->
         %{"url" => url, "status" => 200, "body" => "response from #{url}"}
       end)
 
@@ -539,7 +539,7 @@ defmodule MquickjsExTest do
 
     test "multiple fetch with aggregation" do
       {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
-      ctx = MquickjsEx.set!(ctx, :fetch_user, fn id -> %{"id" => id, "name" => "User#{id}"} end)
+      ctx = MquickjsEx.set!(ctx, :fetch_user, fn [id] -> %{"id" => id, "name" => "User#{id}"} end)
 
       code = """
       var user1 = fetch_user(1);
@@ -554,7 +554,7 @@ defmodule MquickjsExTest do
 
     test "JSON parsing pattern" do
       {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
-      ctx = MquickjsEx.set!(ctx, :fetch_json, fn _url ->
+      ctx = MquickjsEx.set!(ctx, :fetch_json, fn [_url] ->
         ~s|{"items": [1, 2, 3], "count": 3}|
       end)
 
@@ -576,23 +576,23 @@ defmodule MquickjsExTest do
   describe "setting functions via set/3" do
     test "set function and call from eval" do
       {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
-      {:ok, ctx} = MquickjsEx.set(ctx, :double, fn x -> x * 2 end)
+      {:ok, ctx} = MquickjsEx.set(ctx, :double, fn [x] -> x * 2 end)
       {:ok, result} = MquickjsEx.eval(ctx, "double(21)")
       assert result == 42
     end
 
     test "set! function and call from eval!" do
       {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
-      ctx = MquickjsEx.set!(ctx, :add, fn a, b -> a + b end)
+      ctx = MquickjsEx.set!(ctx, :add, fn [a, b] -> a + b end)
       {result, _ctx} = MquickjsEx.eval!(ctx, "add(10, 32)")
       assert result == 42
     end
 
     test "multiple functions set via set!" do
       {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
-      ctx = MquickjsEx.set!(ctx, :add, fn a, b -> a + b end)
-      ctx = MquickjsEx.set!(ctx, :multiply, fn a, b -> a * b end)
-      ctx = MquickjsEx.set!(ctx, :greet, fn name -> "Hello, #{name}!" end)
+      ctx = MquickjsEx.set!(ctx, :add, fn [a, b] -> a + b end)
+      ctx = MquickjsEx.set!(ctx, :multiply, fn [a, b] -> a * b end)
+      ctx = MquickjsEx.set!(ctx, :greet, fn [name] -> "Hello, #{name}!" end)
 
       {result, ctx} = MquickjsEx.eval!(ctx, "add(2, 3)")
       assert result == 5
@@ -607,7 +607,7 @@ defmodule MquickjsExTest do
     test "mix of values and functions" do
       {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
       ctx = MquickjsEx.set!(ctx, :multiplier, 10)
-      ctx = MquickjsEx.set!(ctx, :scale, fn x -> x * 10 end)
+      ctx = MquickjsEx.set!(ctx, :scale, fn [x] -> x * 10 end)
 
       {result, _ctx} = MquickjsEx.eval!(ctx, "scale(multiplier)")
       assert result == 100
@@ -615,7 +615,7 @@ defmodule MquickjsExTest do
 
     test "function persists across multiple eval calls" do
       {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
-      ctx = MquickjsEx.set!(ctx, :increment, fn x -> x + 1 end)
+      ctx = MquickjsEx.set!(ctx, :increment, fn [x] -> x + 1 end)
 
       {result1, ctx} = MquickjsEx.eval!(ctx, "increment(1)")
       {result2, ctx} = MquickjsEx.eval!(ctx, "increment(10)")
@@ -628,7 +628,7 @@ defmodule MquickjsExTest do
 
     test "function with complex return value" do
       {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
-      ctx = MquickjsEx.set!(ctx, :get_user, fn id ->
+      ctx = MquickjsEx.set!(ctx, :get_user, fn [id] ->
         %{"id" => id, "name" => "User#{id}", "active" => true}
       end)
 
