@@ -292,6 +292,78 @@ defmodule MquickjsEx do
     NIF.nif_gc(ctx.ref)
   end
 
+  @doc """
+  Store a key-value pair in private storage.
+
+  Private storage is useful for storing Elixir data that should be
+  associated with the context but not exposed to JavaScript.
+
+  Returns the updated context.
+
+  ## Examples
+
+      {:ok, ctx} = MquickjsEx.new()
+      ctx = MquickjsEx.put_private(ctx, :user_id, 123)
+
+  """
+  def put_private(%Context{} = ctx, key, value) do
+    %{ctx | private: Map.put(ctx.private, key, value)}
+  end
+
+  @doc """
+  Retrieve a value from private storage.
+
+  Returns `{:ok, value}` if the key exists, `:error` otherwise.
+
+  ## Examples
+
+      {:ok, ctx} = MquickjsEx.new()
+      ctx = MquickjsEx.put_private(ctx, :user_id, 123)
+      {:ok, 123} = MquickjsEx.get_private(ctx, :user_id)
+      :error = MquickjsEx.get_private(ctx, :nonexistent)
+
+  """
+  def get_private(%Context{private: private}, key) do
+    case Map.fetch(private, key) do
+      {:ok, value} -> {:ok, value}
+      :error -> :error
+    end
+  end
+
+  @doc """
+  Retrieve a value from private storage, raising if not found.
+
+  ## Examples
+
+      {:ok, ctx} = MquickjsEx.new()
+      ctx = MquickjsEx.put_private(ctx, :user_id, 123)
+      123 = MquickjsEx.get_private!(ctx, :user_id)
+
+  """
+  def get_private!(%Context{} = ctx, key) do
+    case get_private(ctx, key) do
+      {:ok, value} -> value
+      :error -> raise "private key `#{inspect(key)}` does not exist"
+    end
+  end
+
+  @doc """
+  Remove a key from private storage.
+
+  Returns the updated context.
+
+  ## Examples
+
+      {:ok, ctx} = MquickjsEx.new()
+      ctx = MquickjsEx.put_private(ctx, :user_id, 123)
+      ctx = MquickjsEx.delete_private(ctx, :user_id)
+      :error = MquickjsEx.get_private(ctx, :user_id)
+
+  """
+  def delete_private(%Context{} = ctx, key) do
+    %{ctx | private: Map.delete(ctx.private, key)}
+  end
+
   # Build full function name with scope
   defp build_full_name([], name), do: to_string(name)
 
