@@ -96,7 +96,7 @@ defmodule MquickjsEx.API do
   @callback scope :: scope_def()
 
   @doc "Optional callback run when the API is loaded"
-  @callback install(Context.t(), scope_def(), any()) :: Context.t() | String.t()
+  @callback install(MquickjsEx.Context.t(), scope_def(), any()) :: MquickjsEx.Context.t() | String.t()
 
   @optional_callbacks [install: 3]
 

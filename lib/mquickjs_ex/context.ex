@@ -1,5 +1,13 @@
 defmodule MquickjsEx.Context do
-  @moduledoc false
+  @moduledoc """
+  A JavaScript execution context.
+
+  This struct holds the reference to the underlying QuickJS context
+  and tracks registered callbacks and loaded API modules.
+
+  You typically don't interact with this module directly - use the
+  functions in `MquickjsEx` instead.
+  """
 
   @type callback_meta :: %{
           fun: function(),
