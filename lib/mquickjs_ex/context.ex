@@ -5,7 +5,7 @@ defmodule MquickjsEx.Context do
 
   @type t :: %__MODULE__{
           ref: reference(),
-          callbacks: %{String.t() => (list() -> any())}
+          callbacks: %{String.t() => function()}
         }
 
   @spec new(reference()) :: t()
@@ -13,8 +13,8 @@ defmodule MquickjsEx.Context do
     %__MODULE__{ref: ref}
   end
 
-  @spec put_callback(t(), atom() | String.t(), (list() -> any())) :: t()
-  def put_callback(%__MODULE__{} = ctx, name, fun) when is_function(fun, 1) do
+  @spec put_callback(t(), atom() | String.t(), function()) :: t()
+  def put_callback(%__MODULE__{} = ctx, name, fun) when is_function(fun) do
     %{ctx | callbacks: Map.put(ctx.callbacks, to_string(name), fun)}
   end
 

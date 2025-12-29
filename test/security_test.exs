@@ -382,8 +382,8 @@ defmodule MquickjsEx.SecurityTest do
     test "callback cannot access Elixir internals" do
       {:ok, ctx} = MquickjsEx.new()
 
-      # Register a simple callback - args is [[1, 2, 3]] (array wrapped in array)
-      ctx = MquickjsEx.set!(ctx, :safeFunc, fn [numbers] -> Enum.sum(numbers) end)
+      # Register a simple callback - receives the array as a single argument
+      ctx = MquickjsEx.set!(ctx, :safeFunc, fn numbers -> Enum.sum(numbers) end)
 
       # Test callback works correctly
       result = MquickjsEx.eval(ctx, "safeFunc([1, 2, 3])")
@@ -394,8 +394,8 @@ defmodule MquickjsEx.SecurityTest do
     test "callback receives only serializable data" do
       {:ok, ctx} = MquickjsEx.new()
 
-      ctx = MquickjsEx.set!(ctx, :inspect, fn args ->
-        send(self(), {:received, args})
+      ctx = MquickjsEx.set!(ctx, :inspect, fn arg ->
+        send(self(), {:received, arg})
         "ok"
       end)
 
@@ -403,8 +403,8 @@ defmodule MquickjsEx.SecurityTest do
         inspect([1, "hello", true, null, {key: "value"}]);
       """)
 
-      # args is [[...]] because the JS array is passed as a single argument
-      assert_receive {:received, [[1, "hello", true, nil, %{"key" => "value"}]]}
+      # The JS array is passed as a single argument (Elixir list)
+      assert_receive {:received, [1, "hello", true, nil, %{"key" => "value"}]}
     end
   end
 
