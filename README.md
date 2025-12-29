@@ -1,6 +1,6 @@
 # MquickjsEx
 
-[![Hex.pm](https://img.shields.io/badge/hex-not%20published-lightgrey)](https://hex.pm/)
+[![Hex.pm](https://img.shields.io/hexpm/v/mquickjs_ex.svg)](https://hex.pm/packages/mquickjs_ex)
 [![Elixir](https://img.shields.io/badge/elixir-%3E%3D%201.16-blueviolet)](https://elixir-lang.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
