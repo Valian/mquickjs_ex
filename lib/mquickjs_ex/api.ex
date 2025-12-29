@@ -158,8 +158,7 @@ defmodule MquickjsEx.API do
 
     quote do
       @js_function MquickjsEx.API.validate_func!(
-                     {unquote(name), false,
-                      Module.delete_attribute(__MODULE__, :variadic) || false},
+                     {unquote(name), false, Module.delete_attribute(__MODULE__, :variadic) || false},
                      __MODULE__,
                      @js_function
                    )
@@ -188,8 +187,7 @@ defmodule MquickjsEx.API do
 
     quote do
       @js_function MquickjsEx.API.validate_func!(
-                     {unquote(name), true,
-                      Module.delete_attribute(__MODULE__, :variadic) || false},
+                     {unquote(name), true, Module.delete_attribute(__MODULE__, :variadic) || false},
                      __MODULE__,
                      @js_function
                    )
