@@ -18,6 +18,19 @@ defmodule MquickjsEx do
       {result, _} = MquickjsEx.eval!(ctx, "add(1, 2)")
       # result => 3
 
+  ## Loading API Modules
+
+  Use `load_api/2` to load a module defined with `MquickjsEx.API`:
+
+      defmodule MathAPI do
+        use MquickjsEx.API, scope: "math"
+        defjs add(a, b), do: a + b
+      end
+
+      {:ok, ctx} = MquickjsEx.new()
+      ctx = MquickjsEx.load_api(ctx, MathAPI)
+      {:ok, 3} = MquickjsEx.eval(ctx, "math.add(1, 2)")
+
   ## Type Conversions
 
   | Elixir        | JavaScript |
@@ -36,6 +49,7 @@ defmodule MquickjsEx do
 
   alias MquickjsEx.Context
   alias MquickjsEx.NIF
+  alias MquickjsEx.RuntimeException
 
   @doc """
   Create a new JavaScript context.
@@ -105,18 +119,9 @@ defmodule MquickjsEx do
 
   """
   def eval!(%Context{} = ctx, code) when is_binary(code) do
-    if Context.has_callbacks?(ctx) do
-      case run_with_callbacks(ctx, code, ctx.callbacks) do
-        {:ok, result, ctx} -> {result, ctx}
-        {:error, reason} when is_binary(reason) -> raise "JS Error: #{reason}"
-        {:error, reason} -> raise "JS Error: #{inspect(reason)}"
-      end
-    else
-      case NIF.nif_eval(ctx.ref, code) do
-        {:ok, result} -> {result, ctx}
-        {:error, reason} when is_binary(reason) -> raise "JS Error: #{reason}"
-        {:error, reason} -> raise "JS Error: #{inspect(reason)}"
-      end
+    case eval(ctx, code) do
+      {:ok, result} -> {result, ctx}
+      {:error, reason} -> raise_js_error(reason)
     end
   end
 
@@ -149,10 +154,9 @@ defmodule MquickjsEx do
 
   """
   def get!(%Context{} = ctx, name) when is_atom(name) or is_binary(name) do
-    case NIF.nif_get(ctx.ref, name) do
+    case get(ctx, name) do
       {:ok, value} -> value
-      {:error, reason} when is_binary(reason) -> raise "JS Error: #{reason}"
-      {:error, reason} -> raise "JS Error: #{inspect(reason)}"
+      {:error, reason} -> raise_js_error(reason)
     end
   end
 
@@ -218,16 +222,58 @@ defmodule MquickjsEx do
       42
 
   """
-  def set!(%Context{} = ctx, name, fun) when (is_atom(name) or is_binary(name)) and is_function(fun) do
-    Context.put_callback(ctx, name, fun)
-  end
-
   def set!(%Context{} = ctx, name_or_path, value) do
     case set(ctx, name_or_path, value) do
       {:ok, ctx} -> ctx
-      {:error, reason} when is_binary(reason) -> raise "JS Error: #{reason}"
-      {:error, reason} -> raise "JS Error: #{inspect(reason)}"
+      {:error, reason} -> raise_js_error(reason)
     end
+  end
+
+  @doc """
+  Load an API module into the JavaScript context.
+
+  The module must be defined using `use MquickjsEx.API`.
+
+  ## Examples
+
+      defmodule MathAPI do
+        use MquickjsEx.API, scope: "math"
+        defjs add(a, b), do: a + b
+        defjs multiply(a, b), do: a * b
+      end
+
+      {:ok, ctx} = MquickjsEx.new()
+      ctx = MquickjsEx.load_api(ctx, MathAPI)
+      {:ok, 5} = MquickjsEx.eval(ctx, "math.add(2, 3)")
+
+  """
+  def load_api(%Context{} = ctx, module, data \\ nil) when is_atom(module) do
+    scope = module.scope()
+    functions = module.__js_functions__()
+
+    # Register each function as a callback with metadata
+    ctx =
+      Enum.reduce(functions, ctx, fn {name, uses_state, variadic}, acc ->
+        full_name = build_full_name(scope, name)
+        # Create function reference with correct arity
+        fun = build_callback_fun(module, name, uses_state, variadic)
+        Context.put_callback_meta(acc, full_name, fun, uses_state, variadic)
+      end)
+
+    # Track loaded API
+    ctx = Context.add_loaded_api(ctx, module)
+
+    # Run install callback if defined
+    MquickjsEx.API.install(ctx, module, scope, data)
+  end
+
+  @doc """
+  Load an API module into the JavaScript context, raising on error.
+
+  See `load_api/3` for details.
+  """
+  def load_api!(%Context{} = ctx, module, data \\ nil) when is_atom(module) do
+    load_api(ctx, module, data)
   end
 
   @doc """
@@ -246,6 +292,51 @@ defmodule MquickjsEx do
     NIF.nif_gc(ctx.ref)
   end
 
+  # Build full function name with scope
+  defp build_full_name([], name), do: to_string(name)
+
+  defp build_full_name(scope, name) do
+    Enum.join(scope ++ [to_string(name)], ".")
+  end
+
+  # Build a callback function that wraps the module function
+  defp build_callback_fun(module, name, uses_state, variadic) do
+    if uses_state do
+      if variadic do
+        # Variadic with state: fun(args, state)
+        fn args, ctx ->
+          apply(module, name, [args, ctx])
+        end
+      else
+        # Non-variadic with state: fun(arg1, arg2, ..., state)
+        fn args, ctx ->
+          apply(module, name, args ++ [ctx])
+        end
+      end
+    else
+      if variadic do
+        # Variadic without state: fun(args)
+        fn args, _ctx ->
+          apply(module, name, [args])
+        end
+      else
+        # Non-variadic without state: fun(arg1, arg2, ...)
+        fn args, _ctx ->
+          apply(module, name, args)
+        end
+      end
+    end
+  end
+
+  # Raise a JS error using RuntimeException
+  defp raise_js_error(reason) when is_binary(reason) do
+    raise RuntimeException, js_error: reason
+  end
+
+  defp raise_js_error(reason) do
+    raise RuntimeException, js_error: inspect(reason)
+  end
+
   # Internal: run with callbacks (used by eval when callbacks present)
   defp run_with_callbacks(%Context{} = ctx, code, callbacks) when is_map(callbacks) do
     wrapped_code = wrap_with_callbacks(code, Map.keys(callbacks))
@@ -254,24 +345,65 @@ defmodule MquickjsEx do
 
   # Wrap user code with callback function definitions.
   # Each registered callback becomes a JS function that calls __call().
+  # Handles scoped functions by creating namespace objects.
   defp wrap_with_callbacks(code, callback_names) do
     wrappers =
       callback_names
-      |> Enum.map(fn name ->
-        # Create a wrapper function that calls __call with the function name and args
-        """
-        function #{name}() {
-          var args = [];
-          for (var i = 0; i < arguments.length; i++) args.push(arguments[i]);
-          return __call("#{name}", args);
-        }
-        """
-      end)
+      |> Enum.map(&build_js_wrapper/1)
       |> Enum.join("\n")
 
-    # Just prepend the wrappers - user code runs in global scope
-    # and the last expression value is returned by JS_EVAL_RETVAL
     "#{wrappers}\n#{code}"
+  end
+
+  defp build_js_wrapper(name) do
+    parts = String.split(name, ".")
+
+    if length(parts) > 1 do
+      # Scoped function - need namespace setup
+      namespace_setup = build_namespace_setup(parts)
+      func_wrapper = build_scoped_func_wrapper(name, parts)
+      namespace_setup <> "\n" <> func_wrapper
+    else
+      # Simple top-level function
+      """
+      function #{name}() {
+        var args = [];
+        for (var i = 0; i < arguments.length; i++) args.push(arguments[i]);
+        return __call("#{name}", args);
+      }
+      """
+    end
+  end
+
+  defp build_namespace_setup(parts) do
+    # For ["math", "utils", "add"], generate:
+    # var math = math || {};
+    # math.utils = math.utils || {};
+    parts
+    |> Enum.take(length(parts) - 1)
+    |> Enum.with_index()
+    |> Enum.map(fn {_part, idx} ->
+      path = Enum.take(parts, idx + 1) |> Enum.join(".")
+
+      if idx == 0 do
+        "var #{path} = #{path} || {};"
+      else
+        "#{path} = #{path} || {};"
+      end
+    end)
+    |> Enum.join("\n")
+  end
+
+  defp build_scoped_func_wrapper(full_name, parts) do
+    path = Enum.join(parts, ".")
+
+    """
+    #{path} = function() {
+      var args = [];
+      for (var i = 0; i < arguments.length; i++) args.push(arguments[i]);
+      return __call("#{full_name}", args);
+    };
+    """
   end
 
   # The run loop: execute code, handle yields, resume with results.
@@ -284,17 +416,13 @@ defmodule MquickjsEx do
         {:ok, result, ctx}
 
       {:yield, func_name, args_json} ->
-        # Parse the args JSON
         case Jason.decode(args_json) do
           {:ok, args} ->
-            # Look up the callback
             case Map.fetch(callbacks, func_name) do
-              {:ok, callback} when is_function(callback) ->
-                # Execute the callback
+              {:ok, callback_entry} ->
                 try do
-                  result = callback.(args)
-                  # Add result to cache and re-run
-                  run_loop(ctx, code, callbacks, cached_results ++ [result])
+                  {result, new_ctx} = execute_callback(callback_entry, args, ctx)
+                  run_loop(new_ctx, code, callbacks, cached_results ++ [result])
                 rescue
                   e ->
                     {:error, "Callback error in #{func_name}: #{Exception.message(e)}"}
@@ -311,5 +439,24 @@ defmodule MquickjsEx do
       {:error, reason} ->
         {:error, reason}
     end
+  end
+
+  # Execute callback - handles both legacy format (plain function) and new format (map with metadata)
+  defp execute_callback(%{fun: fun, uses_state: true}, args, ctx) do
+    case fun.(args, ctx) do
+      {result, %Context{} = new_ctx} -> {result, new_ctx}
+      result -> {result, ctx}
+    end
+  end
+
+  defp execute_callback(%{fun: fun, uses_state: false}, args, ctx) do
+    result = fun.(args, ctx)
+    {result, ctx}
+  end
+
+  # Legacy format: plain function that receives args list
+  defp execute_callback(fun, args, ctx) when is_function(fun) do
+    result = fun.(args)
+    {result, ctx}
   end
 end
