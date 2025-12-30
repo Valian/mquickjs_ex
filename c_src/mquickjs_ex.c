@@ -8,6 +8,7 @@
 #include <string.h>
 #include <sys/time.h>
 #include <sys/mman.h>
+#include <time.h>
 
 #include "erl_nif.h"
 #include "vendor/mquickjs.h"
@@ -75,7 +76,22 @@ typedef struct {
     uint8_t *mem_buf;
     size_t mem_size;
     JSContext *ctx;
+    uint64_t deadline_ms;  /* Timeout deadline (0 = no timeout) */
 } JsContext;
+
+/* Get current time in milliseconds (monotonic clock) */
+static uint64_t get_time_ms(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (uint64_t)ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
+}
+
+/* Interrupt handler for timeout support */
+static int timeout_interrupt_handler(JSContext *ctx, void *opaque) {
+    JsContext *js = (JsContext *)opaque;
+    if (js->deadline_ms == 0) return 0;
+    return (get_time_ms() > js->deadline_ms) ? 1 : 0;
+}
 
 static void js_log_func(void *opaque, const void *buf, size_t buf_len)
 {
@@ -638,6 +654,13 @@ static ERL_NIF_TERM nif_new(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
             enif_make_atom(env, "js_context_failed"));
     }
 
+    /* Initialize timeout to disabled */
+    js->deadline_ms = 0;
+
+    /* Set up context opaque for interrupt handler */
+    JS_SetContextOpaque(js->ctx, js);
+    JS_SetInterruptHandler(js->ctx, timeout_interrupt_handler);
+
     /* Set up logging */
     JS_SetLogFunc(js->ctx, js_log_func);
 
@@ -659,6 +682,21 @@ static ERL_NIF_TERM nif_eval(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]
         return enif_make_badarg(env);
     }
 
+    /* Get timeout parameter (0 = no timeout) */
+    unsigned long timeout_ms = 0;
+    if (argc > 2) {
+        if (!enif_get_ulong(env, argv[2], &timeout_ms)) {
+            return enif_make_badarg(env);
+        }
+    }
+
+    /* Set deadline for timeout */
+    if (timeout_ms > 0) {
+        js->deadline_ms = get_time_ms() + timeout_ms;
+    } else {
+        js->deadline_ms = 0;
+    }
+
     /*
      * IMPORTANT: Copy the code to a local buffer before passing to JS_Eval.
      *
@@ -672,6 +710,7 @@ static ERL_NIF_TERM nif_eval(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]
      */
     char *code_copy = malloc(code_bin.size + 1);
     if (!code_copy) {
+        js->deadline_ms = 0;  /* Reset deadline on error */
         return enif_make_tuple2(env,
             enif_make_atom(env, "error"),
             enif_make_atom(env, "alloc_failed"));
@@ -683,7 +722,20 @@ static ERL_NIF_TERM nif_eval(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]
     JSValue result = JS_Eval(js->ctx, code_copy, code_bin.size, "eval", JS_EVAL_RETVAL);
     free(code_copy);
 
+    /* Reset deadline after eval */
+    uint64_t deadline_was = js->deadline_ms;
+    js->deadline_ms = 0;
+
     if (JS_IsException(result)) {
+        /* Check if this was a timeout */
+        if (deadline_was > 0 && get_time_ms() > deadline_was) {
+            /* Clear the exception */
+            JS_GetException(js->ctx);
+            return enif_make_tuple2(env,
+                enif_make_atom(env, "error"),
+                enif_make_atom(env, "timeout"));
+        }
+
         JSValue err = JS_GetException(js->ctx);
 
         /* Try to get error message */
@@ -691,6 +743,14 @@ static ERL_NIF_TERM nif_eval(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]
         if (JS_IsString(js->ctx, msg)) {
             JSCStringBuf buf;
             const char *str = JS_ToCString(js->ctx, msg, &buf);
+
+            /* Check for "interrupted" message which indicates timeout */
+            if (strcmp(str, "interrupted") == 0) {
+                return enif_make_tuple2(env,
+                    enif_make_atom(env, "error"),
+                    enif_make_atom(env, "timeout"));
+            }
+
             size_t len = strlen(str);
             ERL_NIF_TERM binary;
             unsigned char *data = enif_make_new_binary(env, len, &binary);
@@ -945,6 +1005,21 @@ static ERL_NIF_TERM nif_run(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
         return enif_make_badarg(env);
     }
 
+    /* Get timeout parameter (0 = no timeout) - argv[3] */
+    unsigned long timeout_ms = 0;
+    if (argc > 3) {
+        if (!enif_get_ulong(env, argv[3], &timeout_ms)) {
+            return enif_make_badarg(env);
+        }
+    }
+
+    /* Set deadline for timeout */
+    if (timeout_ms > 0) {
+        js->deadline_ms = get_time_ms() + timeout_ms;
+    } else {
+        js->deadline_ms = 0;
+    }
+
     /*
      * Strategy: Use pure JavaScript for the yield mechanism.
      *
@@ -1036,7 +1111,20 @@ static ERL_NIF_TERM nif_run(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
     JSValue result = JS_Eval(js->ctx, full_code, written + code_bin.size, "run", JS_EVAL_RETVAL);
     free(full_code);
 
+    /* Reset deadline after eval */
+    uint64_t deadline_was = js->deadline_ms;
+    js->deadline_ms = 0;
+
     if (JS_IsException(result)) {
+        /* Check if this was a timeout */
+        if (deadline_was > 0 && get_time_ms() > deadline_was) {
+            /* Clear the exception */
+            JS_GetException(js->ctx);
+            return enif_make_tuple2(env,
+                enif_make_atom(env, "error"),
+                enif_make_atom(env, "timeout"));
+        }
+
         JSValue err = JS_GetException(js->ctx);
 
         /* Try to get error message */
@@ -1044,6 +1132,13 @@ static ERL_NIF_TERM nif_run(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
         if (JS_IsString(js->ctx, msg_val)) {
             JSCStringBuf buf;
             const char *msg = JS_ToCString(js->ctx, msg_val, &buf);
+
+            /* Check for "interrupted" message which indicates timeout */
+            if (strcmp(msg, "interrupted") == 0) {
+                return enif_make_tuple2(env,
+                    enif_make_atom(env, "error"),
+                    enif_make_atom(env, "timeout"));
+            }
 
             /* Check if it's a yield exception */
             const char *func_name;
@@ -1127,11 +1222,11 @@ static int load(ErlNifEnv *env, void **priv_data, ERL_NIF_TERM load_info)
 
 static ErlNifFunc nif_funcs[] = {
     {"nif_new", 1, nif_new, 0},
-    {"nif_eval", 2, nif_eval, 0},
+    {"nif_eval", 3, nif_eval, 0},
     {"nif_get", 2, nif_get, 0},
     {"nif_set_path", 3, nif_set_path, 0},
     {"nif_gc", 1, nif_gc, 0},
-    {"nif_run", 3, nif_run, 0},
+    {"nif_run", 4, nif_run, 0},
 };
 
 ERL_NIF_INIT(Elixir.MquickjsEx.NIF, nif_funcs, load, NULL, NULL, NULL)

@@ -692,4 +692,75 @@ defmodule MquickjsExTest do
       assert {:ok, "hidden"} = MquickjsEx.get_private(ctx, :secret)
     end
   end
+
+  # ============================================================================
+  # Timeout Tests
+  # ============================================================================
+
+  describe "timeout" do
+    test "returns error when execution exceeds timeout" do
+      {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
+      # Infinite loop should be interrupted by timeout
+      assert {:error, :timeout} = MquickjsEx.eval(ctx, "while(true) {}", timeout: 100)
+    end
+
+    test "succeeds when execution completes under timeout" do
+      {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
+      assert {:ok, 4} = MquickjsEx.eval(ctx, "2 + 2", timeout: 1000)
+    end
+
+    test "no timeout when not specified" do
+      {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
+      # Should work without timeout option
+      assert {:ok, 2} = MquickjsEx.eval(ctx, "1 + 1")
+    end
+
+    test "no timeout when timeout is 0" do
+      {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
+      # timeout: 0 means no timeout
+      assert {:ok, 6} = MquickjsEx.eval(ctx, "2 * 3", timeout: 0)
+    end
+
+    test "timeout with complex computation" do
+      {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
+      # Heavy computation that should timeout
+      heavy_code = """
+      var sum = 0;
+      for (var i = 0; i < 1000000000; i++) {
+        sum += i;
+      }
+      sum
+      """
+
+      assert {:error, :timeout} = MquickjsEx.eval(ctx, heavy_code, timeout: 50)
+    end
+
+    test "timeout does not affect subsequent eval calls" do
+      {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
+      # First call times out
+      assert {:error, :timeout} = MquickjsEx.eval(ctx, "while(true) {}", timeout: 50)
+      # Subsequent call should work normally (deadline should be reset)
+      assert {:ok, 42} = MquickjsEx.eval(ctx, "42", timeout: 1000)
+    end
+
+    test "timeout works with callbacks" do
+      {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
+      ctx = MquickjsEx.set!(ctx, :get_value, fn [] -> 10 end)
+
+      # Should succeed under timeout
+      assert {:ok, 20} = MquickjsEx.eval(ctx, "get_value() * 2", timeout: 1000)
+    end
+
+    test "timeout with callbacks and infinite loop" do
+      {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
+      ctx = MquickjsEx.set!(ctx, :get_value, fn [] -> 10 end)
+
+      code = """
+      var x = get_value();
+      while(true) { x++; }
+      """
+
+      assert {:error, :timeout} = MquickjsEx.eval(ctx, code, timeout: 100)
+    end
+  end
 end
