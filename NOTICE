@@ -1,0 +1,36 @@
+MquickjsEx
+Copyright 2025 Jakub Skalecki
+
+This product includes software developed at TV Labs Ltd (https://tvlabs.ai/).
+
+================================================================================
+
+Portions of this software are derived from the Lua library for Elixir
+(https://github.com/tv-labs/lua), Copyright 2025 TV Labs Ltd, licensed under
+the Apache License, Version 2.0.
+
+The following components are adapted from tv-labs/lua:
+
+- MquickjsEx.API module: The `defjs` macro system, `@variadic` attribute
+  handling, `validate_func!/3`, `__before_compile__` callback structure,
+  `install/4` dispatcher, and `runtime_exception!/1` macro are derived from
+  the corresponding `deflua` macro system in Lua.API.
+
+- Public API design: The function signatures and patterns for `new/1`,
+  `eval/2`, `eval!/2`, `get/2`, `get!/2`, `set/3`, `set!/3`, `load_api/3`,
+  and the private storage API (`put_private/3`, `get_private/2`,
+  `get_private!/2`, `delete_private/2`) follow the design established
+  in tv-labs/lua.
+
+- MquickjsEx.RuntimeException: The exception structure with scope/function/
+  message keyword handling is adapted from Lua.RuntimeException.
+
+================================================================================
+
+This product also includes vendored code from MQuickJS (Micro QuickJS):
+
+MQuickJS - Minimal JavaScript Engine
+Copyright (c) 2017-2021 Fabrice Bellard
+Copyright (c) 2017-2021 Charlie Gordon
+
+Licensed under the MIT License. See c_src/vendor/LICENSE for details.
