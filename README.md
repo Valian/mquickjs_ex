@@ -2,7 +2,7 @@
 
 [![Hex.pm](https://img.shields.io/hexpm/v/mquickjs_ex.svg)](https://hex.pm/packages/mquickjs_ex)
 [![Elixir](https://img.shields.io/badge/elixir-%3E%3D%201.16-blueviolet)](https://elixir-lang.org/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
 <!-- MDOC !-->
 
@@ -322,15 +322,28 @@ For the complete reference, see the [MQuickJS documentation](https://bellard.org
 
 This project builds on [MQuickJS](https://github.com/bellard/mquickjs) by Fabrice Bellard and Charlie Gordon - a remarkable minimal JavaScript engine that makes embedding JS in resource-constrained environments possible.
 
-**Inspiration:**
+**Based on tv-labs/lua:**
 
-- [tv-labs/lua](https://github.com/tv-labs/lua) - Ergonomic Elixir API for Luerl; influenced our public API design
+The Elixir API design and significant portions of the macro system are derived from [tv-labs/lua](https://github.com/tv-labs/lua) by TV Labs Ltd. Specifically:
+
+- The `MquickjsEx.API` module with its `defjs` macro is adapted from `Lua.API` and `deflua`
+- The public API patterns (`new`, `eval`, `get`, `set`, `load_api`, private storage) follow tv-labs/lua's design
+- The exception handling structure is adapted from `Lua.RuntimeException`
+
+We are grateful to the tv-labs/lua maintainers for creating such an ergonomic interface pattern for embedding scripting languages in Elixir.
+
+**Other inspiration:**
+
 - [livebook-dev/pythonx](https://github.com/livebook-dev/pythonx) - Demonstrated embedding another language runtime directly in the BEAM
 
 ## License
 
-MIT
+Apache 2.0 - see [LICENSE](LICENSE) and [NOTICE](NOTICE) for details.
 
 ### Third-Party Code
 
-This library includes vendored code from [MQuickJS](https://github.com/bellard/mquickjs) (Micro QuickJS JavaScript Engine) by Fabrice Bellard and Charlie Gordon, licensed under the MIT License. See `c_src/vendor/LICENSE` for details.
+This library includes:
+
+- Vendored code from [MQuickJS](https://github.com/bellard/mquickjs) (Micro QuickJS JavaScript Engine) by Fabrice Bellard and Charlie Gordon, licensed under the MIT License. See `c_src/vendor/LICENSE` for details.
+
+- Code derived from [tv-labs/lua](https://github.com/tv-labs/lua) by TV Labs Ltd, licensed under the Apache License 2.0. See [NOTICE](NOTICE) for attribution details.

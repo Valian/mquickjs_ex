@@ -34,11 +34,11 @@ defmodule MquickjsEx.MixProject do
 
   defp package do
     [
-      licenses: ["MIT"],
+      licenses: ["Apache-2.0"],
       links: %{
         "GitHub" => @source_url
       },
-      files: ~w(lib c_src .formatter.exs mix.exs README.md LICENSE Makefile),
+      files: ~w(lib c_src .formatter.exs mix.exs README.md LICENSE NOTICE Makefile),
       exclude_patterns: ~w(c_src/*.h c_src/mquickjs_ex_stdlib_gen)
     ]
   end
