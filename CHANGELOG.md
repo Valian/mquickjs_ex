@@ -1,10 +1,16 @@
 # Changelog
 
-## UNRELEASED
+## Unreleased
 
 ### Added
 
 - Timeout support for `eval/3` via `:timeout` option (milliseconds). Long-running JavaScript code can be interrupted, returning `{:error, :timeout}`. Uses QuickJS's built-in interrupt handler mechanism with monotonic clock for accurate timing. Context remains usable after timeout.
+
+### Changed
+
+- Change license from MIT to Apache 2.0
+- Add NOTICE file per Apache 2.0 requirements
+- Add attribution for derived code from tv-labs/lua
 
 ## 0.1.0 - 2025-12-29
 
