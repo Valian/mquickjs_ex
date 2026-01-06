@@ -41,6 +41,12 @@ defmodule MquickjsEx do
   If the context has registered callback functions (set via `set/3`), they
   will be available to call from the JavaScript code.
 
+  ## Options
+
+    * `:timeout` - Timeout in milliseconds. If the execution exceeds this duration,
+      it will be interrupted and `{:error, :timeout}` will be returned.
+      A value of `0` or omitting this option means no timeout (default).
+
   ## Examples
 
       iex> {:ok, ctx} = MquickjsEx.new()
@@ -51,15 +57,22 @@ defmodule MquickjsEx do
       iex> MquickjsEx.eval(ctx, ~s|"hello"|)
       {:ok, "hello"}
 
+      # With timeout
+      iex> {:ok, ctx} = MquickjsEx.new()
+      iex> MquickjsEx.eval(ctx, "2 + 2", timeout: 1000)
+      {:ok, 4}
+
   """
-  def eval(%Context{} = ctx, code) when is_binary(code) do
+  def eval(%Context{} = ctx, code, opts \\ []) when is_binary(code) do
+    timeout = Keyword.get(opts, :timeout, 0)
+
     if Context.has_callbacks?(ctx) do
-      case run_with_callbacks(ctx, code, ctx.callbacks) do
+      case run_with_callbacks(ctx, code, ctx.callbacks, timeout) do
         {:ok, result, _ctx} -> {:ok, result}
         {:error, _} = error -> error
       end
     else
-      NIF.nif_eval(ctx.ref, code)
+      NIF.nif_eval(ctx.ref, code, timeout)
     end
   end
 
@@ -384,9 +397,9 @@ defmodule MquickjsEx do
   end
 
   # Internal: run with callbacks (used by eval when callbacks present)
-  defp run_with_callbacks(%Context{} = ctx, code, callbacks) when is_map(callbacks) do
+  defp run_with_callbacks(%Context{} = ctx, code, callbacks, timeout) when is_map(callbacks) do
     wrapped_code = wrap_with_callbacks(code, Map.keys(callbacks))
-    run_loop(ctx, wrapped_code, callbacks, [])
+    run_loop(ctx, wrapped_code, callbacks, [], timeout)
   end
 
   # Wrap user code with callback function definitions.
@@ -453,11 +466,11 @@ defmodule MquickjsEx do
   end
 
   # The run loop: execute code, handle yields, resume with results.
-  defp run_loop(%Context{} = ctx, code, callbacks, cached_results) do
+  defp run_loop(%Context{} = ctx, code, callbacks, cached_results, timeout) do
     # Convert cached results to JSON strings for the NIF
     cached_json = Enum.map(cached_results, &Jason.encode!/1)
 
-    case NIF.nif_run(ctx.ref, code, cached_json) do
+    case NIF.nif_run(ctx.ref, code, cached_json, timeout) do
       {:ok, result} ->
         {:ok, result, ctx}
 
@@ -468,7 +481,7 @@ defmodule MquickjsEx do
               {:ok, callback_entry} ->
                 try do
                   {result, new_ctx} = execute_callback(callback_entry, args, ctx)
-                  run_loop(new_ctx, code, callbacks, cached_results ++ [result])
+                  run_loop(new_ctx, code, callbacks, cached_results ++ [result], timeout)
                 rescue
                   e ->
                     {:error, "Callback error in #{func_name}: #{Exception.message(e)}"}

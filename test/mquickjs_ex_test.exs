@@ -692,4 +692,17 @@ defmodule MquickjsExTest do
       assert {:ok, "hidden"} = MquickjsEx.get_private(ctx, :secret)
     end
   end
+
+  describe "timeout" do
+    test "interrupts infinite loop and context remains usable" do
+      {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
+      assert {:error, :timeout} = MquickjsEx.eval(ctx, "while(true) {}", timeout: 100)
+      assert {:ok, 42} = MquickjsEx.eval(ctx, "42")
+    end
+
+    test "timeout 0 means no limit" do
+      {:ok, ctx} = MquickjsEx.new(memory: @default_memory)
+      assert {:ok, 4} = MquickjsEx.eval(ctx, "2 + 2", timeout: 0)
+    end
+  end
 end
