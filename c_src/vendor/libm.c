@@ -484,7 +484,7 @@ double js_scalbn(double x, int n)
  *	If (2) is false, then q   = q ; otherwise q   = q  + 2      .
  *		 	       i+1   i             i+1   i
  *
- *	With some algebric manipulation, it is not difficult to see
+ *	With some algebraic manipulation, it is not difficult to see
  *	that (2) is equivalent to 
  *                             -(i+1)
  *			s  +  2       <= y			(3)
@@ -1937,7 +1937,7 @@ double js_exp(double x)
  *	1. Compute and return log2(x) in two pieces:
  *		log2(x) = w1 + w2,
  *	   where w1 has 53-24 = 29 bit trailing zeros.
- *	2. Perform y*log2(x) = n+y' by simulating muti-precision 
+ *	2. Perform y*log2(x) = n+y' by simulating multi-precision 
  *	   arithmetic, where |y'|<=0.5.
  *	3. Return x**y = 2**n*exp(y'*log2)
  *
@@ -2086,7 +2086,7 @@ static double js_log_internal(double x, int flag)
     } else {
         t = zero_low(t);
         if (flag == 1) {
-            /* mutiply (p_l+p_h) by lg2 */
+            /* multiply (p_l+p_h) by lg2 */
             u = t*lg2_h;
             v = (p_l-(t-p_h))*lg2+t*lg2_l;
         } else {
@@ -2249,7 +2249,7 @@ double js_pow(double x, double y)
 	    if(j<0) n = -n;
 	    p_h -= t;
 	}
-        /* mutiply (p_l+p_h) by lg2 */
+        /* multiply (p_l+p_h) by lg2 */
 	t = zero_low(p_l+p_h);
 	u = t*lg2_h;
 	v = (p_l-(t-p_h))*lg2+t*lg2_l;
