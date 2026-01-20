@@ -284,7 +284,7 @@ static int atom_cmp(const void *p1, const void *p2)
     return strcmp(a1->str, a2->str);
 }
 
-/* js_atom_table must be propertly aligned because the property hash
+/* js_atom_table must be properly aligned because the property hash
    table uses the low bits of the atom pointer value */
 #define ATOM_ALIGN 64
 
